@@ -6,6 +6,7 @@ import {
 import {
   checkBootstrapStatus as defaultCheckBootstrap,
   runBootstrap as defaultRunBootstrap,
+  forceBootstrap as defaultForceBootstrap,
   formatPartialBootstrapError,
   type BootstrapStatus,
 } from "./bootstrap"
@@ -64,6 +65,10 @@ export function createConfigHook() {
         agent,
       }
     }
+    config.command["workflow-init"] = {
+      template: `{{args}}`,
+      description: "Regenerate workflow agent files",
+    }
 
     // Tool shaping is handled by agent frontmatter in .opencode/agents/*.md
   }
@@ -82,7 +87,8 @@ export function createCommandHook(
   client: any,
   projectDir: string,
   checkBootstrapFn: (dir: string) => Promise<BootstrapStatus> = defaultCheckBootstrap,
-  runBootstrapFn: (dir: string) => Promise<void> = defaultRunBootstrap
+  runBootstrapFn: (dir: string) => Promise<void> = defaultRunBootstrap,
+  forceBootstrapFn: (dir: string) => Promise<void> = defaultForceBootstrap
 ) {
   const phaseNames = new Set(Object.keys(PHASE_AGENT_MAP))
 
@@ -90,7 +96,17 @@ export function createCommandHook(
     input: { command: string; sessionID: string; arguments: string },
     output: { parts: any[] }
   ) => {
-    // Only handle workflow commands
+    // Handle workflow-init: force-write all agent files
+    if (input.command === "workflow-init") {
+      await forceBootstrapFn(projectDir)
+      output.parts.push({
+        type: "text",
+        text: "Workflow agent files regenerated successfully (7 agents written to .opencode/agents/).",
+      })
+      return
+    }
+
+    // Only handle phase commands
     if (!phaseNames.has(input.command)) return
 
     const phase = input.command as PhaseName

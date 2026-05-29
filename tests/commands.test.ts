@@ -38,6 +38,15 @@ describe("createConfigHook", () => {
     expect(config.command.plan.agent).toBe("workflow-plan")
     expect(config.command.implement.agent).toBe("workflow-implement")
   })
+
+  test("registers workflow-init command", async () => {
+    const config: any = {}
+    const configHook = createConfigHook()
+    await configHook(config)
+
+    expect(config.command["workflow-init"]).toBeDefined()
+    expect(config.command["workflow-init"].description).toBeDefined()
+  })
 })
 
 // ── Command execution hook tests ──────────────────────────────────
@@ -289,5 +298,46 @@ describe("createCommandHook", () => {
     expect(client.calls).toHaveLength(2)
     expect(client.calls[0].body.parts[0].text).toContain("first topic")
     expect(client.calls[1].body.parts[0].text).toContain("second topic")
+  })
+
+  test("workflow-init calls forceBootstrap and sets output message", async () => {
+    let forceBootstrapCalled = false
+    const client = mockClient()
+    const hook = createCommandHook(
+      client as any,
+      "/test/project",
+      mockBootstrapCheck("ready"),
+      async () => {},
+      async () => { forceBootstrapCalled = true }
+    )
+
+    const output = { parts: [] as any[] }
+    await hook(
+      { command: "workflow-init", sessionID: "sess-1", arguments: "" },
+      output
+    )
+
+    expect(forceBootstrapCalled).toBe(true)
+    expect(output.parts).toHaveLength(1)
+    expect(output.parts[0].text).toContain("regenerated")
+  })
+
+  test("workflow-init does not throw __WORKFLOW_HANDLED__", async () => {
+    const client = mockClient()
+    const hook = createCommandHook(
+      client as any,
+      "/test/project",
+      mockBootstrapCheck("ready"),
+      async () => {},
+      async () => {}
+    )
+
+    const output = { parts: [] as any[] }
+    // Should return normally, not throw
+    await hook(
+      { command: "workflow-init", sessionID: "sess-1", arguments: "" },
+      output
+    )
+    expect(client.calls).toHaveLength(0)
   })
 })

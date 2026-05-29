@@ -6,6 +6,7 @@ import { tmpdir } from "node:os"
 import {
   checkBootstrapStatus,
   runBootstrap,
+  forceBootstrap,
   formatPartialBootstrapError,
 } from "../src/bootstrap"
 import { AGENT_NAMES, AGENTS_DIR, PLANS_DIR } from "../src/constants"
@@ -159,7 +160,39 @@ describe("formatPartialBootstrapError", () => {
     expect(msg).toContain("workflow-explore.md")
     expect(msg).toContain("workflow-research.md")
     expect(msg).toContain("5 of 7")
-    expect(msg).toContain("Delete all")
+    expect(msg).toContain("workflow-init")
+  })
+})
+
+describe("forceBootstrap", () => {
+  test("writes all 7 agent files from scratch", async () => {
+    await forceBootstrap(testDir)
+    const agentsDir = join(testDir, AGENTS_DIR)
+    const files = await readdir(agentsDir)
+    expect(files).toHaveLength(7)
+    for (const name of AGENT_NAMES) {
+      const content = await readFile(join(agentsDir, `${name}.md`), "utf-8")
+      expect(content).toBe(getAgentContent(name))
+    }
+  })
+
+  test("overwrites existing agent files", async () => {
+    const agentsDir = join(testDir, AGENTS_DIR)
+    await mkdir(agentsDir, { recursive: true })
+    await writeFile(join(agentsDir, "workflow-brainstorm.md"), "old content", "utf-8")
+
+    await forceBootstrap(testDir)
+
+    const content = await readFile(join(agentsDir, "workflow-brainstorm.md"), "utf-8")
+    expect(content).toBe(getAgentContent("workflow-brainstorm"))
+    expect(content).not.toBe("old content")
+  })
+
+  test("creates plans directory", async () => {
+    await forceBootstrap(testDir)
+    const plansDir = join(testDir, PLANS_DIR)
+    const stat = await readdir(plansDir)
+    expect(stat).toBeDefined()
   })
 })
 

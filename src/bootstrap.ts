@@ -118,7 +118,24 @@ export function formatPartialBootstrapError(
     `${present.length} of 7 agent files exist. The workflow plugin requires all 7.`,
     "",
     "To recover, either:",
-    "  1. Delete all .opencode/agents/workflow-*.md files and re-run the command (triggers fresh bootstrap)",
+    "  1. Run /workflow-init to regenerate all agent files",
     "  2. Manually create the missing files listed above",
   ].join("\n")
+}
+
+/**
+ * Force-write all 7 workflow agent files, overwriting any that already exist.
+ * Used by /workflow-init to regenerate agents after plugin updates.
+ */
+export async function forceBootstrap(projectDir: string): Promise<void> {
+  const agentsDir = join(projectDir, AGENTS_DIR)
+  const plansDir = join(projectDir, PLANS_DIR)
+
+  await mkdir(agentsDir, { recursive: true })
+  await mkdir(plansDir, { recursive: true })
+
+  for (const name of AGENT_NAMES) {
+    const content = getAgentContent(name)
+    await writeFile(join(agentsDir, `${name}.md`), content, "utf-8")
+  }
 }
