@@ -9,6 +9,7 @@ import {
   formatPartialBootstrapError,
 } from "../src/bootstrap"
 import { AGENT_NAMES, AGENTS_DIR, PLANS_DIR } from "../src/constants"
+import { getAgentContent } from "../src/agents"
 
 let testDir: string
 
@@ -158,5 +159,89 @@ describe("formatPartialBootstrapError", () => {
     expect(msg).toContain("workflow-research.md")
     expect(msg).toContain("5 of 7")
     expect(msg).toContain("Delete all")
+  })
+})
+
+describe("getAgentContent", () => {
+  test("all 7 agents return non-empty content", () => {
+    for (const name of AGENT_NAMES) {
+      const content = getAgentContent(name)
+      expect(content.length).toBeGreaterThan(50)
+    }
+  })
+
+  test("each agent content includes the agent name in frontmatter", () => {
+    for (const name of AGENT_NAMES) {
+      const content = getAgentContent(name)
+      expect(content).toContain(`name: ${name}`)
+    }
+  })
+
+  test("each agent content starts with valid frontmatter", () => {
+    for (const name of AGENT_NAMES) {
+      const content = getAgentContent(name)
+      expect(content.startsWith("---\n")).toBe(true)
+      // Should have opening and closing frontmatter delimiters
+      const parts = content.split("---")
+      expect(parts.length).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  test("brainstorm agent references its available tools", () => {
+    const content = getAgentContent("workflow-brainstorm")
+    expect(content).toContain("explore")
+    expect(content).toContain("research")
+    expect(content).toContain("write_spec")
+    expect(content).toContain("review_spec")
+    expect(content).toContain("read_spec")
+    // Should instruct not to write code
+    expect(content).toMatch(/do not.*(?:write|edit|create).*(?:code|implementation)/i)
+  })
+
+  test("plan agent references its available tools", () => {
+    const content = getAgentContent("workflow-plan")
+    expect(content).toContain("read_spec")
+    expect(content).toContain("write_plan")
+    expect(content).toContain("review_plan")
+    expect(content).toContain("read_plan")
+    // Should instruct not to write code
+    expect(content).toMatch(/do not.*(?:write|edit|create).*(?:code|implementation)/i)
+  })
+
+  test("implement agent references its available tools", () => {
+    const content = getAgentContent("workflow-implement")
+    expect(content).toContain("programmer")
+    expect(content).toContain("read_plan")
+    expect(content).toContain("explore")
+    expect(content).toContain("research")
+  })
+
+  test("explore subagent is read-only and non-mutating", () => {
+    const content = getAgentContent("workflow-explore")
+    expect(content).toMatch(/read.only/i)
+    expect(content).toMatch(/do not.*(?:edit|create|delete)/i)
+  })
+
+  test("research subagent is non-mutating", () => {
+    const content = getAgentContent("workflow-research")
+    expect(content).toMatch(/research|gather|context/i)
+    expect(content).toMatch(/do not.*(?:edit|modify|create|delete)/i)
+    // Must not have implementation-oriented instructions
+    expect(content).not.toMatch(/implement.*code/i)
+  })
+
+  test("programmer subagent allows implementation", () => {
+    const content = getAgentContent("workflow-programmer")
+    expect(content).toMatch(/implement|code|edit/i)
+    // Should reference testing
+    expect(content).toMatch(/test/i)
+  })
+
+  test("reviewer subagent is read-only and review-oriented", () => {
+    const content = getAgentContent("workflow-reviewer")
+    expect(content).toMatch(/review|critique|feedback/i)
+    expect(content).toContain("read_spec")
+    expect(content).toContain("read_plan")
+    expect(content).toMatch(/do not.*(?:edit|create|write)/i)
   })
 })
