@@ -223,23 +223,34 @@ describe("getAgentContent", () => {
   test("all agents deny the task tool", () => {
     for (const name of AGENT_NAMES) {
       const content = getAgentContent(name)
-      expect(content).toContain("task: false")
+      expect(content).toContain("task: deny")
     }
   })
 
-  test("orchestrator agents deny lsp tool", () => {
+  test("orchestrator agents deny built-in navigation and meta tools", () => {
     const orchestrators: AgentName[] = ["workflow-brainstorm", "workflow-plan", "workflow-implement"]
     for (const name of orchestrators) {
       const content = getAgentContent(name)
-      expect(content).toContain("lsp: false")
+      expect(content).toContain("read: deny")
+      expect(content).toContain("glob: deny")
+      expect(content).toContain("grep: deny")
+      expect(content).toContain("lsp: deny")
+      expect(content).toContain("skill: deny")
+      expect(content).toContain("todowrite: deny")
+      expect(content).toContain("webfetch: deny")
+      expect(content).toContain("websearch: deny")
+      expect(content).toContain("mcp_*: deny")
     }
   })
 
-  test("subagents do not deny lsp tool", () => {
+  test("subagents do not deny navigation tools", () => {
     const subagents: AgentName[] = ["workflow-explore", "workflow-research", "workflow-programmer", "workflow-reviewer"]
     for (const name of subagents) {
       const content = getAgentContent(name)
-      expect(content).not.toContain("lsp: false")
+      expect(content).not.toContain("read: deny")
+      expect(content).not.toContain("glob: deny")
+      expect(content).not.toContain("grep: deny")
+      expect(content).not.toContain("lsp: deny")
     }
   })
 

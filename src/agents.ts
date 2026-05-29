@@ -9,16 +9,24 @@ const AGENT_CONTENT: Record<AgentName, string> = {
   "workflow-brainstorm": `---
 name: workflow-brainstorm
 mode: primary
-tools:
-  programmer: false
-  read_plan: false
-  write_plan: false
-  review_plan: false
-  edit: false
-  write: false
-  bash: false
-  task: false
-  lsp: false
+permission:
+  read: deny
+  edit: deny
+  glob: deny
+  grep: deny
+  bash: deny
+  task: deny
+  lsp: deny
+  skill: deny
+  todowrite: deny
+  webfetch: deny
+  websearch: deny
+  question: deny
+  programmer: deny
+  read_plan: deny
+  write_plan: deny
+  review_plan: deny
+  mcp_*: deny
 ---
 
 # Workflow Brainstorm Agent
@@ -54,15 +62,23 @@ You are a brainstorming specialist. Your role is to explore ideas, ask clarifyin
   "workflow-plan": `---
 name: workflow-plan
 mode: primary
-tools:
-  programmer: false
-  write_spec: false
-  review_spec: false
-  edit: false
-  write: false
-  bash: false
-  task: false
-  lsp: false
+permission:
+  read: deny
+  edit: deny
+  glob: deny
+  grep: deny
+  bash: deny
+  task: deny
+  lsp: deny
+  skill: deny
+  todowrite: deny
+  webfetch: deny
+  websearch: deny
+  question: deny
+  programmer: deny
+  write_spec: deny
+  review_spec: deny
+  mcp_*: deny
 ---
 
 # Workflow Plan Agent
@@ -107,11 +123,22 @@ Plans should include:
   "workflow-implement": `---
 name: workflow-implement
 mode: primary
-tools:
-  write_spec: false
-  write_plan: false
-  task: false
-  lsp: false
+permission:
+  read: deny
+  edit: deny
+  glob: deny
+  grep: deny
+  bash: deny
+  task: deny
+  lsp: deny
+  skill: deny
+  todowrite: deny
+  webfetch: deny
+  websearch: deny
+  question: deny
+  write_spec: deny
+  write_plan: deny
+  mcp_*: deny
 ---
 
 # Workflow Implement Agent
@@ -145,11 +172,10 @@ You are an implementation specialist. Your role is to execute against an approve
   "workflow-explore": `---
 name: workflow-explore
 mode: subagent
-tools:
-  edit: false
-  write: false
-  bash: false
-  task: false
+permission:
+  edit: deny
+  bash: deny
+  task: deny
 ---
 
 # Workflow Explore Agent
@@ -174,11 +200,10 @@ You are a codebase exploration specialist. Your role is to inspect the local cod
   "workflow-research": `---
 name: workflow-research
 mode: subagent
-tools:
-  edit: false
-  write: false
-  bash: false
-  task: false
+permission:
+  edit: deny
+  bash: deny
+  task: deny
 ---
 
 # Workflow Research Agent
@@ -203,8 +228,8 @@ You are a research specialist. Your role is to gather broader technical context 
   "workflow-programmer": `---
 name: workflow-programmer
 mode: subagent
-tools:
-  task: false
+permission:
+  task: deny
 ---
 
 # Workflow Programmer Agent
@@ -237,11 +262,10 @@ You are a focused implementation specialist. Your role is to perform specific co
   "workflow-reviewer": `---
 name: workflow-reviewer
 mode: subagent
-tools:
-  edit: false
-  write: false
-  bash: false
-  task: false
+permission:
+  edit: deny
+  bash: deny
+  task: deny
 ---
 
 # Workflow Reviewer Agent
