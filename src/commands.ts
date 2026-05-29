@@ -99,11 +99,14 @@ export function createCommandHook(
     // Handle workflow-init: force-write all agent files
     if (input.command === "workflow-init") {
       await forceBootstrapFn(projectDir)
-      output.parts.push({
-        type: "text",
-        text: "Workflow agent files regenerated successfully (7 agents written to .opencode/agents/).",
+      await client.session.prompt({
+        path: { id: input.sessionID },
+        body: {
+          noReply: true,
+          parts: [{ type: "text", text: "Workflow agent files regenerated (7 agents written to .opencode/agents/)." }],
+        },
       })
-      return
+      throw new Error("__WORKFLOW_HANDLED__")
     }
 
     // Only handle phase commands

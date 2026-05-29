@@ -300,7 +300,7 @@ describe("createCommandHook", () => {
     expect(client.calls[1].body.parts[0].text).toContain("second topic")
   })
 
-  test("workflow-init calls forceBootstrap and sets output message", async () => {
+  test("workflow-init calls forceBootstrap and posts confirmation with noReply", async () => {
     let forceBootstrapCalled = false
     const client = mockClient()
     const hook = createCommandHook(
@@ -311,18 +311,17 @@ describe("createCommandHook", () => {
       async () => { forceBootstrapCalled = true }
     )
 
-    const output = { parts: [] as any[] }
-    await hook(
-      { command: "workflow-init", sessionID: "sess-1", arguments: "" },
-      output
-    )
+    await invokeWorkflowCommand(hook, {
+      command: "workflow-init", sessionID: "sess-1", arguments: "",
+    })
 
     expect(forceBootstrapCalled).toBe(true)
-    expect(output.parts).toHaveLength(1)
-    expect(output.parts[0].text).toContain("regenerated")
+    expect(client.calls).toHaveLength(1)
+    expect(client.calls[0].body.noReply).toBe(true)
+    expect(client.calls[0].body.parts[0].text).toContain("regenerated")
   })
 
-  test("workflow-init does not throw __WORKFLOW_HANDLED__", async () => {
+  test("workflow-init throws __WORKFLOW_HANDLED__", async () => {
     const client = mockClient()
     const hook = createCommandHook(
       client as any,
@@ -332,12 +331,8 @@ describe("createCommandHook", () => {
       async () => {}
     )
 
+    const input = { command: "workflow-init", sessionID: "sess-1", arguments: "" }
     const output = { parts: [] as any[] }
-    // Should return normally, not throw
-    await hook(
-      { command: "workflow-init", sessionID: "sess-1", arguments: "" },
-      output
-    )
-    expect(client.calls).toHaveLength(0)
+    await expect(hook(input, output)).rejects.toThrow("__WORKFLOW_HANDLED__")
   })
 })
