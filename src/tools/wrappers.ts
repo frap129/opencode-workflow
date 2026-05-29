@@ -1,7 +1,7 @@
 // src/tools/wrappers.ts
 import { tool } from "@opencode-ai/plugin"
 import { SPEC_FILENAME_REGEX, PLAN_FILENAME_REGEX } from "../constants"
-import { getSessionVariant } from "../session"
+import { getCachedVariant } from "../session"
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ async function dispatchSubtask(
   metadata({ title: `Dispatching subtask to ${targetAgent}` })
 
   try {
-    const variant = await getSessionVariant(client, sessionID)
+    const variant = getCachedVariant(sessionID)
     await client.session.prompt({
       path: { id: sessionID },
       body: {

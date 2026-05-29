@@ -1,62 +1,74 @@
-import { describe, expect, test } from "bun:test"
-import { getSessionVariant } from "../src/session"
+import { describe, expect, test, beforeEach } from "bun:test"
+import { cacheVariant, getCachedVariant, createChatMessageHook } from "../src/session"
 
-describe("getSessionVariant", () => {
-  test("returns variant when session has one set", async () => {
-    const mockClient = {
-      session: {
-        get: async () => ({
-          data: { model: { id: "anthropic/claude-sonnet", providerID: "anthropic", variant: "thinking" } },
-        }),
-      },
-    }
-    const variant = await getSessionVariant(mockClient, "sess-1")
-    expect(variant).toBe("thinking")
+describe("variant cache", () => {
+  beforeEach(() => {
+    // Clear cache state between tests by caching undefined
+    cacheVariant("sess-1", undefined)
+    cacheVariant("sess-2", undefined)
   })
 
-  test("returns undefined when session has no variant", async () => {
-    const mockClient = {
-      session: {
-        get: async () => ({
-          data: { model: { id: "anthropic/claude-sonnet", providerID: "anthropic" } },
-        }),
-      },
-    }
-    const variant = await getSessionVariant(mockClient, "sess-1")
-    expect(variant).toBeUndefined()
+  test("cacheVariant stores and getCachedVariant retrieves", () => {
+    cacheVariant("sess-1", "thinking")
+    expect(getCachedVariant("sess-1")).toBe("thinking")
   })
 
-  test("returns undefined when session has no model", async () => {
-    const mockClient = {
-      session: {
-        get: async () => ({ data: {} }),
-      },
-    }
-    const variant = await getSessionVariant(mockClient, "sess-1")
-    expect(variant).toBeUndefined()
+  test("getCachedVariant returns undefined for unknown session", () => {
+    expect(getCachedVariant("unknown-session")).toBeUndefined()
   })
 
-  test("returns undefined when session.get fails", async () => {
-    const mockClient = {
-      session: {
-        get: async () => { throw new Error("network error") },
-      },
-    }
-    const variant = await getSessionVariant(mockClient, "sess-1")
-    expect(variant).toBeUndefined()
+  test("cacheVariant overwrites previous value", () => {
+    cacheVariant("sess-1", "thinking")
+    cacheVariant("sess-1", "default")
+    expect(getCachedVariant("sess-1")).toBe("default")
   })
 
-  test("passes sessionID to client.session.get via v1 path shape", async () => {
-    let capturedOptions: any
-    const mockClient = {
-      session: {
-        get: async (opts: any) => {
-          capturedOptions = opts
-          return { data: { model: { variant: "thinking" } } }
-        },
-      },
-    }
-    await getSessionVariant(mockClient, "sess-42")
-    expect(capturedOptions.path.id).toBe("sess-42")
+  test("cacheVariant can store undefined", () => {
+    cacheVariant("sess-1", "thinking")
+    cacheVariant("sess-1", undefined)
+    expect(getCachedVariant("sess-1")).toBeUndefined()
+  })
+
+  test("separate sessions have independent variants", () => {
+    cacheVariant("sess-1", "thinking")
+    cacheVariant("sess-2", "default")
+    expect(getCachedVariant("sess-1")).toBe("thinking")
+    expect(getCachedVariant("sess-2")).toBe("default")
+  })
+})
+
+describe("createChatMessageHook", () => {
+  beforeEach(() => {
+    cacheVariant("sess-1", undefined)
+  })
+
+  test("caches variant from message input", async () => {
+    const hook = createChatMessageHook()
+    await hook({
+      sessionID: "sess-1",
+      variant: "thinking",
+    })
+    expect(getCachedVariant("sess-1")).toBe("thinking")
+  })
+
+  test("caches undefined when variant not present", async () => {
+    cacheVariant("sess-1", "thinking")
+    const hook = createChatMessageHook()
+    await hook({
+      sessionID: "sess-1",
+    })
+    expect(getCachedVariant("sess-1")).toBeUndefined()
+  })
+
+  test("handles full input shape with all optional fields", async () => {
+    const hook = createChatMessageHook()
+    await hook({
+      sessionID: "sess-1",
+      agent: "workflow-brainstorm",
+      model: { providerID: "anthropic", modelID: "claude-sonnet" },
+      messageID: "msg-1",
+      variant: "thinking",
+    })
+    expect(getCachedVariant("sess-1")).toBe("thinking")
   })
 })

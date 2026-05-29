@@ -10,19 +10,16 @@ import {
   createReviewSpecTool,
   createReviewPlanTool,
 } from "../src/tools/wrappers"
+import { cacheVariant } from "../src/session"
 
 /**
- * Creates a mock client that records calls to session.prompt() and session.get().
+ * Creates a mock client that records calls to session.prompt().
  * Uses v1 shape: { path: { id }, body: { ... } }
- * Optionally sets a model variant returned by session.get().
  */
-function createMockClient(variant?: string) {
+function createMockClient() {
   const calls: any[] = []
   const client = {
     session: {
-      get: async () => ({
-        data: variant ? { model: { variant } } : {},
-      }),
       prompt: mock(async (options: any) => {
         calls.push(options)
         return { data: { id: "msg-123" } }
@@ -98,6 +95,7 @@ let testDir: string
 
 beforeEach(async () => {
   testDir = await mkdtemp(join(tmpdir(), "wf-wrappers-"))
+  cacheVariant("test-session", undefined)
 })
 
 afterEach(async () => {
@@ -147,7 +145,6 @@ describe("explore", () => {
   test("returns error when subtask dispatch fails", async () => {
     const client = {
       session: {
-        get: async () => ({ data: {} }),
         prompt: mock(async () => {
           throw new Error("network failure")
         }),
@@ -165,7 +162,8 @@ describe("explore", () => {
   })
 
   test("preserves model variant in subtask dispatch", async () => {
-    const { client, calls } = createMockClient("thinking")
+    cacheVariant("test-session", "thinking")
+    const { client, calls } = createMockClient()
     const tool = createExploreTool(client)
     await tool.execute(
       { prompt: "Find API handlers" },
@@ -218,7 +216,6 @@ describe("research", () => {
   test("returns error when dispatch fails", async () => {
     const client = {
       session: {
-        get: async () => ({ data: {} }),
         prompt: mock(async () => { throw new Error("timeout") }),
       },
     }
@@ -260,7 +257,6 @@ describe("programmer", () => {
   test("returns error when dispatch fails", async () => {
     const client = {
       session: {
-        get: async () => ({ data: {} }),
         prompt: mock(async () => { throw new Error("server error") }),
       },
     }
@@ -339,7 +335,6 @@ describe("review_spec", () => {
   test("returns error when dispatch fails", async () => {
     const client = {
       session: {
-        get: async () => ({ data: {} }),
         prompt: mock(async () => { throw new Error("dispatch error") }),
       },
     }
@@ -418,7 +413,6 @@ describe("review_plan", () => {
   test("returns error when dispatch fails", async () => {
     const client = {
       session: {
-        get: async () => ({ data: {} }),
         prompt: mock(async () => { throw new Error("dispatch error") }),
       },
     }

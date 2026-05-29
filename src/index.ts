@@ -14,6 +14,7 @@ import {
   createReviewPlanTool,
 } from "./tools/wrappers"
 import { createConfigHook, createCommandHook } from "./commands"
+import { createChatMessageHook } from "./session"
 
 /**
  * Creates the workflow plugin hooks object.
@@ -46,6 +47,8 @@ export async function createPlugin(ctx: {
     },
 
     config: createConfigHook(),
+
+    "chat.message": createChatMessageHook(),
 
     "command.execute.before": createCommandHook(client, directory),
   }

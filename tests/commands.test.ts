@@ -1,7 +1,7 @@
-// tests/commands.test.ts
-import { describe, expect, test } from "bun:test"
+import { describe, expect, test, beforeEach } from "bun:test"
 import { createConfigHook, createCommandHook } from "../src/commands"
 import { AGENT_NAMES } from "../src/constants"
+import { cacheVariant } from "../src/session"
 
 // ── Config hook tests ─────────────────────────────────────────────
 
@@ -29,14 +29,14 @@ describe("createConfigHook", () => {
     expect(config.command.brainstorm).toBeDefined()
   })
 
-  test("commands do NOT have agent field (agent switching handled in hook)", async () => {
+  test("commands have agent field for persistent agent switching", async () => {
     const config: any = {}
     const configHook = createConfigHook()
     await configHook(config)
 
-    expect(config.command.brainstorm.agent).toBeUndefined()
-    expect(config.command.plan.agent).toBeUndefined()
-    expect(config.command.implement.agent).toBeUndefined()
+    expect(config.command.brainstorm.agent).toBe("workflow-brainstorm")
+    expect(config.command.plan.agent).toBe("workflow-plan")
+    expect(config.command.implement.agent).toBe("workflow-implement")
   })
 
   test("registers workflow-init command", async () => {
@@ -53,17 +53,14 @@ describe("createConfigHook", () => {
 
 describe("createCommandHook", () => {
   /**
-   * Mock client that captures session.prompt() and session.get() calls.
+   * Mock client that captures session.prompt() calls.
    * Uses v1 shape: { path: { id }, body: { ... } }
    */
-  function mockClient(variant?: string) {
+  function mockClient() {
     const calls: any[] = []
     return {
       calls,
       session: {
-        get: async (opts: any) => ({
-          data: variant ? { model: { variant } } : {},
-        }),
         prompt: async (opts: any) => {
           calls.push(opts)
           return { data: {} }
@@ -71,6 +68,11 @@ describe("createCommandHook", () => {
       },
     }
   }
+
+  beforeEach(() => {
+    // Clear variant cache between tests
+    cacheVariant("sess-1", undefined)
+  })
 
   /**
    * Mock checkBootstrapFn that returns a configurable status.
@@ -326,7 +328,8 @@ describe("createCommandHook", () => {
   })
 
   test("preserves model variant when switching to brainstorm agent", async () => {
-    const client = mockClient("thinking")
+    cacheVariant("sess-1", "thinking")
+    const client = mockClient()
     const hook = createCommandHook(
       client,
       "/test/project",
