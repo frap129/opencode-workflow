@@ -8,6 +8,17 @@ import type { AgentName } from "./constants"
 const AGENT_CONTENT: Record<AgentName, string> = {
   "workflow-brainstorm": `---
 name: workflow-brainstorm
+mode: primary
+tools:
+  programmer: false
+  read_plan: false
+  write_plan: false
+  review_plan: false
+  edit: false
+  write: false
+  bash: false
+  task: false
+  lsp: false
 ---
 
 # Workflow Brainstorm Agent
@@ -42,6 +53,16 @@ You are a brainstorming specialist. Your role is to explore ideas, ask clarifyin
 
   "workflow-plan": `---
 name: workflow-plan
+mode: primary
+tools:
+  programmer: false
+  write_spec: false
+  review_spec: false
+  edit: false
+  write: false
+  bash: false
+  task: false
+  lsp: false
 ---
 
 # Workflow Plan Agent
@@ -85,6 +106,12 @@ Plans should include:
 
   "workflow-implement": `---
 name: workflow-implement
+mode: primary
+tools:
+  write_spec: false
+  write_plan: false
+  task: false
+  lsp: false
 ---
 
 # Workflow Implement Agent
@@ -117,6 +144,12 @@ You are an implementation specialist. Your role is to execute against an approve
 
   "workflow-explore": `---
 name: workflow-explore
+mode: subagent
+tools:
+  edit: false
+  write: false
+  bash: false
+  task: false
 ---
 
 # Workflow Explore Agent
@@ -140,6 +173,12 @@ You are a codebase exploration specialist. Your role is to inspect the local cod
 
   "workflow-research": `---
 name: workflow-research
+mode: subagent
+tools:
+  edit: false
+  write: false
+  bash: false
+  task: false
 ---
 
 # Workflow Research Agent
@@ -163,6 +202,9 @@ You are a research specialist. Your role is to gather broader technical context 
 
   "workflow-programmer": `---
 name: workflow-programmer
+mode: subagent
+tools:
+  task: false
 ---
 
 # Workflow Programmer Agent
@@ -194,6 +236,12 @@ You are a focused implementation specialist. Your role is to perform specific co
 
   "workflow-reviewer": `---
 name: workflow-reviewer
+mode: subagent
+tools:
+  edit: false
+  write: false
+  bash: false
+  task: false
 ---
 
 # Workflow Reviewer Agent

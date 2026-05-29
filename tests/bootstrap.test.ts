@@ -9,6 +9,7 @@ import {
   formatPartialBootstrapError,
 } from "../src/bootstrap"
 import { AGENT_NAMES, AGENTS_DIR, PLANS_DIR } from "../src/constants"
+import type { AgentName } from "../src/constants"
 import { getAgentContent } from "../src/agents"
 
 let testDir: string
@@ -181,9 +182,47 @@ describe("getAgentContent", () => {
     for (const name of AGENT_NAMES) {
       const content = getAgentContent(name)
       expect(content.startsWith("---\n")).toBe(true)
-      // Should have opening and closing frontmatter delimiters
       const parts = content.split("---")
       expect(parts.length).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  test("all agents deny the task tool", () => {
+    for (const name of AGENT_NAMES) {
+      const content = getAgentContent(name)
+      expect(content).toContain("task: false")
+    }
+  })
+
+  test("orchestrator agents deny lsp tool", () => {
+    const orchestrators: AgentName[] = ["workflow-brainstorm", "workflow-plan", "workflow-implement"]
+    for (const name of orchestrators) {
+      const content = getAgentContent(name)
+      expect(content).toContain("lsp: false")
+    }
+  })
+
+  test("subagents do not deny lsp tool", () => {
+    const subagents: AgentName[] = ["workflow-explore", "workflow-research", "workflow-programmer", "workflow-reviewer"]
+    for (const name of subagents) {
+      const content = getAgentContent(name)
+      expect(content).not.toContain("lsp: false")
+    }
+  })
+
+  test("orchestrator agents are mode: primary", () => {
+    const orchestrators: AgentName[] = ["workflow-brainstorm", "workflow-plan", "workflow-implement"]
+    for (const name of orchestrators) {
+      const content = getAgentContent(name)
+      expect(content).toContain("mode: primary")
+    }
+  })
+
+  test("subagents are mode: subagent", () => {
+    const subagents: AgentName[] = ["workflow-explore", "workflow-research", "workflow-programmer", "workflow-reviewer"]
+    for (const name of subagents) {
+      const content = getAgentContent(name)
+      expect(content).toContain("mode: subagent")
     }
   })
 

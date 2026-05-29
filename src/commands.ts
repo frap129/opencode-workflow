@@ -1,7 +1,6 @@
 // src/commands.ts
 import {
   PHASE_AGENT_MAP,
-  PHASE_TOOL_MATRIX,
   type PhaseName,
 } from "./constants"
 import {
@@ -66,38 +65,7 @@ export function createConfigHook() {
       }
     }
 
-    // Apply tool shaping per phase agent
-    config.agent ??= {}
-    for (const [phase, matrix] of Object.entries(PHASE_TOOL_MATRIX)) {
-      const agentName = PHASE_AGENT_MAP[phase as PhaseName]
-      config.agent[agentName] ??= {}
-      config.agent[agentName].tools ??= {}
-
-      // Hide workflow tools per the phase matrix
-      for (const hiddenTool of matrix.hidden) {
-        config.agent[agentName].tools[hiddenTool] = false
-      }
-    }
-
-    // Built-in tool posture: brainstorm and plan deny code-editing and shell tools
-    const readOnlyPhases: PhaseName[] = ["brainstorm", "plan"]
-    const deniedBuiltinTools = ["edit", "write", "bash"]
-    for (const phase of readOnlyPhases) {
-      const agentName = PHASE_AGENT_MAP[phase]
-      for (const tool of deniedBuiltinTools) {
-        config.agent[agentName].tools[tool] = false
-      }
-    }
-
-    // Supporting subagent tool posture: enforce read-only / non-mutating contracts
-    const readOnlySubagents = ["workflow-explore", "workflow-research", "workflow-reviewer"]
-    for (const agentName of readOnlySubagents) {
-      config.agent[agentName] ??= {}
-      config.agent[agentName].tools ??= {}
-      for (const tool of deniedBuiltinTools) {
-        config.agent[agentName].tools[tool] = false
-      }
-    }
+    // Tool shaping is handled by agent frontmatter in .opencode/agents/*.md
   }
 }
 

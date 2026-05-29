@@ -1,7 +1,7 @@
 // tests/commands.test.ts
 import { describe, expect, test } from "bun:test"
 import { createConfigHook, createCommandHook } from "../src/commands"
-import { PHASE_TOOL_MATRIX, PHASE_AGENT_MAP, AGENT_NAMES } from "../src/constants"
+import { AGENT_NAMES } from "../src/constants"
 
 // ── Config hook tests ─────────────────────────────────────────────
 
@@ -29,108 +29,14 @@ describe("createConfigHook", () => {
     expect(config.command.brainstorm).toBeDefined()
   })
 
-  test("applies tool shaping for each phase agent", async () => {
+  test("each command has an agent field for agent switching", async () => {
     const config: any = {}
     const configHook = createConfigHook()
     await configHook(config)
 
-    // Config hook should set up agent-level tool visibility
-    expect(config.agent).toBeDefined()
-
-    // For each phase, hidden tools should be set to false
-    for (const [phase, matrix] of Object.entries(PHASE_TOOL_MATRIX)) {
-      const agentName = PHASE_AGENT_MAP[phase as keyof typeof PHASE_AGENT_MAP]
-      const agentConfig = config.agent[agentName]
-      expect(agentConfig).toBeDefined()
-      expect(agentConfig.tools).toBeDefined()
-
-      for (const hiddenTool of matrix.hidden) {
-        expect(agentConfig.tools[hiddenTool]).toBe(false)
-      }
-    }
-  })
-
-  test("does not disable allowed tools for any phase", async () => {
-    const config: any = {}
-    const configHook = createConfigHook()
-    await configHook(config)
-
-    for (const [phase, matrix] of Object.entries(PHASE_TOOL_MATRIX)) {
-      const agentName = PHASE_AGENT_MAP[phase as keyof typeof PHASE_AGENT_MAP]
-      const agentConfig = config.agent[agentName]
-
-      for (const allowedTool of matrix.allowed) {
-        // Allowed tools should either be true or not present (not false)
-        if (agentConfig.tools[allowedTool] !== undefined) {
-          expect(agentConfig.tools[allowedTool]).not.toBe(false)
-        }
-      }
-    }
-  })
-
-  test("brainstorm agent denies code-editing and shell tools", async () => {
-    const config: any = {}
-    const configHook = createConfigHook()
-    await configHook(config)
-
-    const agentConfig = config.agent["workflow-brainstorm"]
-    // Built-in tool posture: deny code-editing and shell mutation
-    expect(agentConfig.tools.edit).toBe(false)
-    expect(agentConfig.tools.write).toBe(false)
-    expect(agentConfig.tools.bash).toBe(false)
-  })
-
-  test("plan agent denies code-editing and shell tools", async () => {
-    const config: any = {}
-    const configHook = createConfigHook()
-    await configHook(config)
-
-    const agentConfig = config.agent["workflow-plan"]
-    expect(agentConfig.tools.edit).toBe(false)
-    expect(agentConfig.tools.write).toBe(false)
-    expect(agentConfig.tools.bash).toBe(false)
-  })
-
-  test("implement agent does not deny code-editing or shell tools", async () => {
-    const config: any = {}
-    const configHook = createConfigHook()
-    await configHook(config)
-
-    const agentConfig = config.agent["workflow-implement"]
-    // Implementation phase should NOT deny these
-    expect(agentConfig.tools.edit).not.toBe(false)
-    expect(agentConfig.tools.write).not.toBe(false)
-    expect(agentConfig.tools.bash).not.toBe(false)
-  })
-
-  test("read-only subagents deny code-editing and shell tools", async () => {
-    const config: any = {}
-    const configHook = createConfigHook()
-    await configHook(config)
-
-    const readOnlySubagents = ["workflow-explore", "workflow-research", "workflow-reviewer"]
-    for (const agentName of readOnlySubagents) {
-      const agentConfig = config.agent[agentName]
-      expect(agentConfig).toBeDefined()
-      expect(agentConfig.tools.edit).toBe(false)
-      expect(agentConfig.tools.write).toBe(false)
-      expect(agentConfig.tools.bash).toBe(false)
-    }
-  })
-
-  test("programmer subagent does not deny code-editing or shell tools", async () => {
-    const config: any = {}
-    const configHook = createConfigHook()
-    await configHook(config)
-
-    const agentConfig = config.agent["workflow-programmer"]
-    // Programmer should be able to edit/write/bash
-    if (agentConfig?.tools) {
-      expect(agentConfig.tools.edit).not.toBe(false)
-      expect(agentConfig.tools.write).not.toBe(false)
-      expect(agentConfig.tools.bash).not.toBe(false)
-    }
-    // If no tools config at all, that's fine — means nothing is denied
+    expect(config.command.brainstorm.agent).toBe("workflow-brainstorm")
+    expect(config.command.plan.agent).toBe("workflow-plan")
+    expect(config.command.implement.agent).toBe("workflow-implement")
   })
 })
 
