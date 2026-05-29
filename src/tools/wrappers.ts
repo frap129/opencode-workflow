@@ -46,24 +46,26 @@ function validateFilename(filename: string, regex: RegExp, kind: string): string
 async function dispatchSubtask(
   client: any,
   sessionID: string,
-  agent: string,
+  callerAgent: string,
+  targetAgent: string,
   prompt: string,
   description: string,
   metadata: (input: { title?: string; metadata?: Record<string, any> }) => void
 ): Promise<string> {
-  metadata({ title: `Dispatching subtask to ${agent}` })
+  metadata({ title: `Dispatching subtask to ${targetAgent}` })
 
   try {
     await client.session.prompt({
       path: { id: sessionID },
       body: {
+        agent: callerAgent,
         noReply: true,
         parts: [
           {
             type: "subtask" as const,
             prompt,
             description,
-            agent,
+            agent: targetAgent,
           },
         ],
       },
@@ -71,12 +73,12 @@ async function dispatchSubtask(
 
     return result({
       title: `Queued subtask: ${description}`,
-      output: `Subtask dispatched to ${agent}. It will run as a child session.`,
-      metadata: { queued: true, targetAgent: agent, description },
+      output: `Subtask dispatched to ${targetAgent}. It will run as a child session.`,
+      metadata: { queued: true, targetAgent, description },
     })
   } catch (error: any) {
     return errorResult(
-      `Failed to dispatch subtask to ${agent}`,
+      `Failed to dispatch subtask to ${targetAgent}`,
       `Subtask dispatch failed: ${error.message}`,
       "DISPATCH_FAILED"
     )
@@ -107,6 +109,7 @@ export function createExploreTool(client: any) {
       return dispatchSubtask(
         client,
         context.sessionID,
+        context.agent,
         "workflow-explore",
         args.prompt.trim(),
         `Explore: ${args.prompt.trim().slice(0, 80)}`,
@@ -138,6 +141,7 @@ export function createResearchTool(client: any) {
       return dispatchSubtask(
         client,
         context.sessionID,
+        context.agent,
         "workflow-research",
         args.prompt.trim(),
         `Research: ${args.prompt.trim().slice(0, 80)}`,
@@ -169,6 +173,7 @@ export function createProgrammerTool(client: any) {
       return dispatchSubtask(
         client,
         context.sessionID,
+        context.agent,
         "workflow-programmer",
         args.prompt.trim(),
         `Implement: ${args.prompt.trim().slice(0, 80)}`,
@@ -210,6 +215,7 @@ export function createReviewSpecTool(client: any) {
       return dispatchSubtask(
         client,
         context.sessionID,
+        context.agent,
         "workflow-reviewer",
         reviewPrompt,
         `Review spec: ${args.filename}`,
@@ -251,6 +257,7 @@ export function createReviewPlanTool(client: any) {
       return dispatchSubtask(
         client,
         context.sessionID,
+        context.agent,
         "workflow-reviewer",
         reviewPrompt,
         `Review plan: ${args.filename}`,
