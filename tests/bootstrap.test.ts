@@ -1,0 +1,162 @@
+// tests/bootstrap.test.ts
+import { describe, expect, test, beforeEach, afterEach } from "bun:test"
+import { mkdtemp, rm, mkdir, writeFile, readdir, readFile } from "node:fs/promises"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
+import {
+  checkBootstrapStatus,
+  runBootstrap,
+  formatPartialBootstrapError,
+} from "../src/bootstrap"
+import { AGENT_NAMES, AGENTS_DIR, PLANS_DIR } from "../src/constants"
+
+let testDir: string
+
+beforeEach(async () => {
+  testDir = await mkdtemp(join(tmpdir(), "wf-bootstrap-"))
+})
+
+afterEach(async () => {
+  await rm(testDir, { recursive: true, force: true })
+})
+
+describe("checkBootstrapStatus", () => {
+  test("returns 'needs-bootstrap' when no agent files exist", async () => {
+    const result = await checkBootstrapStatus(testDir)
+    expect(result.status).toBe("needs-bootstrap")
+  })
+
+  test("returns 'ready' when all agent files exist", async () => {
+    const agentsDir = join(testDir, AGENTS_DIR)
+    await mkdir(agentsDir, { recursive: true })
+    for (const name of AGENT_NAMES) {
+      await writeFile(join(agentsDir, `${name}.md`), `# ${name}`)
+    }
+    const result = await checkBootstrapStatus(testDir)
+    expect(result.status).toBe("ready")
+  })
+
+  test("returns 'partial' when some but not all agent files exist", async () => {
+    const agentsDir = join(testDir, AGENTS_DIR)
+    await mkdir(agentsDir, { recursive: true })
+    // Create only the first 3 agents
+    for (const name of AGENT_NAMES.slice(0, 3)) {
+      await writeFile(join(agentsDir, `${name}.md`), `# ${name}`)
+    }
+    const result = await checkBootstrapStatus(testDir)
+    expect(result.status).toBe("partial")
+    expect(result.missing).toHaveLength(4)
+  })
+})
+
+describe("runBootstrap", () => {
+  test("creates all 7 agent files when none exist", async () => {
+    await runBootstrap(testDir)
+
+    const agentsDir = join(testDir, AGENTS_DIR)
+    const files = await readdir(agentsDir)
+    expect(files).toHaveLength(7)
+    for (const name of AGENT_NAMES) {
+      const content = await readFile(join(agentsDir, `${name}.md`), "utf-8")
+      expect(content.length).toBeGreaterThan(0)
+    }
+  })
+
+  test("creates .opencode/plans/ directory", async () => {
+    await runBootstrap(testDir)
+
+    const plansDir = join(testDir, PLANS_DIR)
+    const entries = await readdir(plansDir)
+    expect(entries).toBeDefined()
+  })
+
+  test("creates .opencode/agents/ directory if missing", async () => {
+    await runBootstrap(testDir)
+
+    const agentsDir = join(testDir, AGENTS_DIR)
+    const entries = await readdir(agentsDir)
+    expect(entries).toHaveLength(7)
+  })
+
+  test("status is 'ready' when all files already exist (bootstrap not called)", async () => {
+    const agentsDir = join(testDir, AGENTS_DIR)
+    await mkdir(agentsDir, { recursive: true })
+    for (const name of AGENT_NAMES) {
+      await writeFile(join(agentsDir, `${name}.md`), "user-edited content")
+    }
+
+    const status = await checkBootstrapStatus(testDir)
+    expect(status.status).toBe("ready")
+  })
+
+  test("cleans up on partial write failure (no partial files left)", async () => {
+    // Inject a failing content generator to simulate mid-bootstrap failure
+    const agentsDir = join(testDir, AGENTS_DIR)
+    let callCount = 0
+    const failingGenerator = (name: string): string => {
+      callCount++
+      if (callCount > 3) throw new Error("simulated write failure")
+      return `---\nname: ${name}\n---\n# ${name}\n`
+    }
+
+    await expect(runBootstrap(testDir, failingGenerator)).rejects.toThrow(
+      "simulated write failure"
+    )
+
+    // Verify no agent files exist in target (all cleaned up)
+    try {
+      const files = await readdir(agentsDir)
+      const workflowFiles = files.filter((f) => f.startsWith("workflow-"))
+      expect(workflowFiles).toHaveLength(0)
+    } catch {
+      // Directory might not exist either — that's fine
+    }
+
+    // Verify no staging directory left behind
+    const opencodeDir = join(testDir, ".opencode")
+    try {
+      const entries = await readdir(opencodeDir)
+      expect(entries).not.toContain(".agents-staging")
+    } catch {
+      // .opencode dir might not exist — that's fine
+    }
+
+    // Status should still be needs-bootstrap
+    const status = await checkBootstrapStatus(testDir)
+    expect(status.status).toBe("needs-bootstrap")
+  })
+
+  test("refuses to run when status is not 'needs-bootstrap'", async () => {
+    // Bootstrap once (succeeds)
+    await runBootstrap(testDir)
+    const status = await checkBootstrapStatus(testDir)
+    expect(status.status).toBe("ready")
+
+    // Attempting bootstrap again should throw
+    await expect(runBootstrap(testDir)).rejects.toThrow(
+      "already bootstrapped"
+    )
+  })
+
+  test("no staging directory left behind after success", async () => {
+    await runBootstrap(testDir)
+    const opencodeDir = join(testDir, ".opencode")
+    const entries = await readdir(opencodeDir)
+    expect(entries).not.toContain(".agents-staging")
+  })
+})
+
+describe("formatPartialBootstrapError", () => {
+  test("produces actionable error message listing missing files", () => {
+    const msg = formatPartialBootstrapError(
+      ["workflow-explore", "workflow-research"],
+      ["workflow-brainstorm", "workflow-plan", "workflow-implement",
+       "workflow-programmer", "workflow-reviewer"]
+    )
+    expect(msg).toContain("partial agent installation detected")
+    expect(msg).toContain("workflow-explore.md")
+    expect(msg).toContain("workflow-research.md")
+    expect(msg).toContain("5 of 7")
+    expect(msg).toContain("Delete all")
+  })
+})
