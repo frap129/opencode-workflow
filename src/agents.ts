@@ -1,5 +1,5 @@
 // src/agents.ts
-import type { AgentName } from "./constants"
+import type { AgentName } from "./constants";
 
 /**
  * Agent content map. Each entry is the full markdown content
@@ -17,7 +17,6 @@ permission:
   bash: deny
   task: deny
   lsp: deny
-  skill: deny
   webfetch: deny
   websearch: deny
   programmer: deny
@@ -68,7 +67,6 @@ permission:
   bash: deny
   task: deny
   lsp: deny
-  skill: deny
   webfetch: deny
   websearch: deny
   programmer: deny
@@ -127,7 +125,6 @@ permission:
   bash: deny
   task: deny
   lsp: deny
-  skill: deny
   webfetch: deny
   websearch: deny
   write_spec: deny
@@ -169,7 +166,6 @@ mode: subagent
 permission:
   edit: deny
   bash: deny
-  task: deny
 ---
 
 # Workflow Explore Agent
@@ -197,7 +193,6 @@ mode: subagent
 permission:
   edit: deny
   bash: deny
-  task: deny
 ---
 
 # Workflow Research Agent
@@ -222,8 +217,6 @@ You are a research specialist. Your role is to gather broader technical context 
   "workflow-programmer": `---
 name: workflow-programmer
 mode: subagent
-permission:
-  task: deny
 ---
 
 # Workflow Programmer Agent
@@ -259,7 +252,6 @@ mode: subagent
 permission:
   edit: deny
   bash: deny
-  task: deny
 ---
 
 # Workflow Reviewer Agent
@@ -294,11 +286,11 @@ Provide your review in this structure:
 - Focus on the artifact content, not on making changes
 - Be specific and actionable in your feedback
 `,
-}
+};
 
 /**
  * Returns the full markdown content for a generated agent file.
  */
 export function getAgentContent(name: AgentName): string {
-  return AGENT_CONTENT[name]
+  return AGENT_CONTENT[name];
 }
