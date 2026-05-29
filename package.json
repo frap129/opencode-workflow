@@ -1,0 +1,15 @@
+{
+  "name": "opencode-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun x tsc --noEmit"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.1.57",
+    "@types/bun": "latest"
+  }
+}
