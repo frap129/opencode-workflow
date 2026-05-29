@@ -20,7 +20,6 @@ permission:
   skill: deny
   webfetch: deny
   websearch: deny
-  question: deny
   programmer: deny
   read_plan: deny
   write_plan: deny
@@ -72,7 +71,6 @@ permission:
   skill: deny
   webfetch: deny
   websearch: deny
-  question: deny
   programmer: deny
   write_spec: deny
   review_spec: deny
@@ -132,7 +130,6 @@ permission:
   skill: deny
   webfetch: deny
   websearch: deny
-  question: deny
   write_spec: deny
   write_plan: deny
   mcp_*: deny
