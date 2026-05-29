@@ -18,7 +18,6 @@ permission:
   task: deny
   lsp: deny
   skill: deny
-  todowrite: deny
   webfetch: deny
   websearch: deny
   question: deny
@@ -71,7 +70,6 @@ permission:
   task: deny
   lsp: deny
   skill: deny
-  todowrite: deny
   webfetch: deny
   websearch: deny
   question: deny
@@ -132,7 +130,6 @@ permission:
   task: deny
   lsp: deny
   skill: deny
-  todowrite: deny
   webfetch: deny
   websearch: deny
   question: deny

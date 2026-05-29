@@ -236,7 +236,6 @@ describe("getAgentContent", () => {
       expect(content).toContain("grep: deny")
       expect(content).toContain("lsp: deny")
       expect(content).toContain("skill: deny")
-      expect(content).toContain("todowrite: deny")
       expect(content).toContain("webfetch: deny")
       expect(content).toContain("websearch: deny")
       expect(content).toContain("mcp_*: deny")
