@@ -1,7 +1,7 @@
 // src/tools/wrappers.ts
 import { tool } from "@opencode-ai/plugin"
 import { SPEC_FILENAME_REGEX, PLAN_FILENAME_REGEX } from "../constants"
-import { getSessionVariant, type V2Client } from "../session"
+import { getSessionVariant } from "../session"
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -41,11 +41,11 @@ function validateFilename(filename: string, regex: RegExp, kind: string): string
 }
 
 /**
- * Dispatch a native subtask via v2Client.session.prompt().
+ * Dispatch a native subtask via client.session.prompt().
  * Returns a structured success or error result string.
  */
 async function dispatchSubtask(
-  v2Client: V2Client,
+  client: any,
   sessionID: string,
   callerAgent: string,
   targetAgent: string,
@@ -56,20 +56,22 @@ async function dispatchSubtask(
   metadata({ title: `Dispatching subtask to ${targetAgent}` })
 
   try {
-    const variant = await getSessionVariant(v2Client, sessionID)
-    await v2Client.session.prompt({
-      sessionID,
-      agent: callerAgent,
-      noReply: true,
-      variant,
-      parts: [
-        {
-          type: "subtask" as const,
-          prompt,
-          description,
-          agent: targetAgent,
-        },
-      ],
+    const variant = await getSessionVariant(client, sessionID)
+    await client.session.prompt({
+      path: { id: sessionID },
+      body: {
+        agent: callerAgent,
+        noReply: true,
+        variant,
+        parts: [
+          {
+            type: "subtask" as const,
+            prompt,
+            description,
+            agent: targetAgent,
+          },
+        ],
+      },
     })
 
     return result({
@@ -92,7 +94,7 @@ async function dispatchSubtask(
  * Create the `explore` wrapper tool.
  * Dispatches focused codebase exploration to workflow-explore.
  */
-export function createExploreTool(v2Client: V2Client) {
+export function createExploreTool(client: any) {
   return tool({
     description:
       "Dispatch a focused codebase exploration task to the workflow-explore subagent. " +
@@ -108,7 +110,7 @@ export function createExploreTool(v2Client: V2Client) {
       if (promptError) return promptError
 
       return dispatchSubtask(
-        v2Client,
+        client,
         context.sessionID,
         context.agent,
         "workflow-explore",
@@ -124,7 +126,7 @@ export function createExploreTool(v2Client: V2Client) {
  * Create the `research` wrapper tool.
  * Dispatches broader investigation to workflow-research.
  */
-export function createResearchTool(v2Client: V2Client) {
+export function createResearchTool(client: any) {
   return tool({
     description:
       "Dispatch a research or investigation task to the workflow-research subagent. " +
@@ -140,7 +142,7 @@ export function createResearchTool(v2Client: V2Client) {
       if (promptError) return promptError
 
       return dispatchSubtask(
-        v2Client,
+        client,
         context.sessionID,
         context.agent,
         "workflow-research",
@@ -156,7 +158,7 @@ export function createResearchTool(v2Client: V2Client) {
  * Create the `programmer` wrapper tool.
  * Dispatches implementation work to workflow-programmer.
  */
-export function createProgrammerTool(v2Client: V2Client) {
+export function createProgrammerTool(client: any) {
   return tool({
     description:
       "Dispatch an implementation task to the workflow-programmer subagent. " +
@@ -172,7 +174,7 @@ export function createProgrammerTool(v2Client: V2Client) {
       if (promptError) return promptError
 
       return dispatchSubtask(
-        v2Client,
+        client,
         context.sessionID,
         context.agent,
         "workflow-programmer",
@@ -188,7 +190,7 @@ export function createProgrammerTool(v2Client: V2Client) {
  * Create the `review_spec` wrapper tool.
  * Dispatches spec review to workflow-reviewer with read_spec access.
  */
-export function createReviewSpecTool(v2Client: V2Client) {
+export function createReviewSpecTool(client: any) {
   return tool({
     description:
       "Dispatch a spec review task to the workflow-reviewer subagent. " +
@@ -214,7 +216,7 @@ export function createReviewSpecTool(v2Client: V2Client) {
       ].filter(Boolean).join("\n")
 
       return dispatchSubtask(
-        v2Client,
+        client,
         context.sessionID,
         context.agent,
         "workflow-reviewer",
@@ -230,7 +232,7 @@ export function createReviewSpecTool(v2Client: V2Client) {
  * Create the `review_plan` wrapper tool.
  * Dispatches plan review to workflow-reviewer with read_plan access.
  */
-export function createReviewPlanTool(v2Client: V2Client) {
+export function createReviewPlanTool(client: any) {
   return tool({
     description:
       "Dispatch a plan review task to the workflow-reviewer subagent. " +
@@ -256,7 +258,7 @@ export function createReviewPlanTool(v2Client: V2Client) {
       ].filter(Boolean).join("\n")
 
       return dispatchSubtask(
-        v2Client,
+        client,
         context.sessionID,
         context.agent,
         "workflow-reviewer",

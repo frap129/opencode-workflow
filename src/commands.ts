@@ -11,7 +11,7 @@ import {
   type BootstrapStatus,
 } from "./bootstrap"
 import type { AgentName } from "./constants"
-import { getSessionVariant, type V2Client } from "./session"
+import { getSessionVariant } from "./session"
 
 /**
  * Phase entry prompt templates.
@@ -52,26 +52,26 @@ const ENTRY_PROMPTS: Record<PhaseName, (args: string) => string> = {
 /**
  * Creates the `config` hook callback.
  * Registers 3 slash commands and applies per-phase tool shaping.
+ *
+ * NOTE: We intentionally omit the `agent` field from command config entries.
+ * If `agent` is set here, opencode performs its own internal agent switch
+ * BEFORE the command.execute.before hook fires, which resets the model variant.
+ * Instead, agent switching is handled in the command hook via the prompt body's
+ * `agent` field, where we can also pass `variant` to preserve it.
  */
 export function createConfigHook() {
   return async (config: any) => {
-    // Register slash commands — the `agent` field on each command config
-    // causes opencode to switch to that agent when the command is invoked.
-    // Subsequent user messages stay on that agent (opencode-native behavior).
     config.command ??= {}
-    for (const [phase, agent] of Object.entries(PHASE_AGENT_MAP)) {
+    for (const [phase] of Object.entries(PHASE_AGENT_MAP)) {
       config.command[phase] = {
         template: `{{args}}`,
         description: `Enter ${phase} mode`,
-        agent,
       }
     }
     config.command["workflow-init"] = {
       template: `{{args}}`,
       description: "Regenerate workflow agent files",
     }
-
-    // Tool shaping is handled by agent frontmatter in .opencode/agents/*.md
   }
 }
 
@@ -86,7 +86,6 @@ export function createConfigHook() {
  */
 export function createCommandHook(
   client: any,
-  v2Client: V2Client,
   projectDir: string,
   checkBootstrapFn: (dir: string) => Promise<BootstrapStatus> = defaultCheckBootstrap,
   runBootstrapFn: (dir: string) => Promise<void> = defaultRunBootstrap,
@@ -101,12 +100,14 @@ export function createCommandHook(
     // Handle workflow-init: force-write all agent files
     if (input.command === "workflow-init") {
       await forceBootstrapFn(projectDir)
-      const initVariant = await getSessionVariant(v2Client, input.sessionID)
-      await v2Client.session.prompt({
-        sessionID: input.sessionID,
-        noReply: true,
-        variant: initVariant,
-        parts: [{ type: "text", text: "Workflow agent files regenerated (7 agents written to .opencode/agents/)." }],
+      const initVariant = await getSessionVariant(client, input.sessionID)
+      await client.session.prompt({
+        path: { id: input.sessionID },
+        body: {
+          noReply: true,
+          variant: initVariant,
+          parts: [{ type: "text", text: "Workflow agent files regenerated (7 agents written to .opencode/agents/)." }],
+        },
       })
       throw new Error("__WORKFLOW_HANDLED__")
     }
@@ -131,20 +132,17 @@ export function createCommandHook(
     const args = (input.arguments || "").trim()
     const entryPrompt = ENTRY_PROMPTS[phase](args)
 
-    // Submit entry prompt to session.
-    // Agent switching is handled by two complementary mechanisms:
-    // 1. The command config's `agent` field (set in createConfigHook) tells opencode
-    //    to switch the session's active agent when the command is invoked.
-    // 2. The `body.agent` field on this prompt call ensures this specific message
-    //    is routed to the correct agent.
-    // The throw below aborts the command template pipeline but does NOT undo
-    // the agent switch — this follows the same pattern used by the DCP plugin.
-    const variant = await getSessionVariant(v2Client, input.sessionID)
-    await v2Client.session.prompt({
-      sessionID: input.sessionID,
-      agent,
-      variant,
-      parts: [{ type: "text", text: entryPrompt }],
+    // Fetch the current variant BEFORE any agent switch happens,
+    // then pass both agent and variant in the prompt body so the
+    // server switches the agent and preserves the variant atomically.
+    const variant = await getSessionVariant(client, input.sessionID)
+    await client.session.prompt({
+      path: { id: input.sessionID },
+      body: {
+        agent,
+        variant,
+        parts: [{ type: "text", text: entryPrompt }],
+      },
     })
 
     // Abort the command pipeline so opencode doesn't also send the template

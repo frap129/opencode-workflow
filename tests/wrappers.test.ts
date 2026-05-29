@@ -12,10 +12,11 @@ import {
 } from "../src/tools/wrappers"
 
 /**
- * Creates a mock v2 client that records calls to session.prompt().
+ * Creates a mock client that records calls to session.prompt() and session.get().
+ * Uses v1 shape: { path: { id }, body: { ... } }
  * Optionally sets a model variant returned by session.get().
  */
-function createMockV2Client(variant?: string) {
+function createMockClient(variant?: string) {
   const calls: any[] = []
   const client = {
     session: {
@@ -45,8 +46,8 @@ function mockContext(directory: string) {
 }
 
 /**
- * Assert the full dispatch payload shape matches native v2 subtask requirements.
- * Verifies: sessionID, noReply, single part with type/prompt/description/agent.
+ * Assert the full dispatch payload shape matches v1 subtask requirements.
+ * Verifies: path.id, body.noReply, single part with type/prompt/description/agent.
  */
 function assertDispatchPayload(
   call: any,
@@ -54,10 +55,10 @@ function assertDispatchPayload(
   expectedAgent: string,
   promptSubstring: string
 ) {
-  expect(call.sessionID).toBe(expectedSessionID)
-  expect(call.noReply).toBe(true)
-  expect(call.parts).toHaveLength(1)
-  const part = call.parts[0]
+  expect(call.path.id).toBe(expectedSessionID)
+  expect(call.body.noReply).toBe(true)
+  expect(call.body.parts).toHaveLength(1)
+  const part = call.body.parts[0]
   expect(part.type).toBe("subtask")
   expect(part.agent).toBe(expectedAgent)
   expect(part.prompt).toContain(promptSubstring)
@@ -107,8 +108,8 @@ afterEach(async () => {
 
 describe("explore", () => {
   test("dispatches subtask to workflow-explore with correct prompt", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createExploreTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createExploreTool(client)
     const result = await tool.execute(
       { prompt: "Find all API endpoint handlers" },
       mockContext(testDir)
@@ -122,8 +123,8 @@ describe("explore", () => {
   })
 
   test("rejects empty prompt", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createExploreTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createExploreTool(client)
     const result = await tool.execute(
       { prompt: "" },
       mockContext(testDir)
@@ -133,8 +134,8 @@ describe("explore", () => {
   })
 
   test("rejects whitespace-only prompt", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createExploreTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createExploreTool(client)
     const result = await tool.execute(
       { prompt: "   " },
       mockContext(testDir)
@@ -152,7 +153,7 @@ describe("explore", () => {
         }),
       },
     }
-    const tool = createExploreTool(client as any)
+    const tool = createExploreTool(client)
     const result = await tool.execute(
       { prompt: "Find API handlers" },
       mockContext(testDir)
@@ -164,27 +165,27 @@ describe("explore", () => {
   })
 
   test("preserves model variant in subtask dispatch", async () => {
-    const { client, calls } = createMockV2Client("thinking")
-    const tool = createExploreTool(client as any)
+    const { client, calls } = createMockClient("thinking")
+    const tool = createExploreTool(client)
     await tool.execute(
       { prompt: "Find API handlers" },
       mockContext(testDir)
     )
 
     expect(calls).toHaveLength(1)
-    expect(calls[0].variant).toBe("thinking")
+    expect(calls[0].body.variant).toBe("thinking")
   })
 
   test("works without variant set in subtask dispatch", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createExploreTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createExploreTool(client)
     await tool.execute(
       { prompt: "Find API handlers" },
       mockContext(testDir)
     )
 
     expect(calls).toHaveLength(1)
-    expect(calls[0].variant).toBeUndefined()
+    expect(calls[0].body.variant).toBeUndefined()
   })
 })
 
@@ -192,8 +193,8 @@ describe("explore", () => {
 
 describe("research", () => {
   test("dispatches subtask to workflow-research with correct prompt", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createResearchTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createResearchTool(client)
     const result = await tool.execute(
       { prompt: "Investigate OAuth2 token refresh patterns" },
       mockContext(testDir)
@@ -207,8 +208,8 @@ describe("research", () => {
   })
 
   test("rejects empty prompt", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createResearchTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createResearchTool(client)
     const result = await tool.execute({ prompt: "" }, mockContext(testDir))
     assertErrorResult(JSON.parse(result), "EMPTY_PROMPT")
     expect(calls).toHaveLength(0)
@@ -221,7 +222,7 @@ describe("research", () => {
         prompt: mock(async () => { throw new Error("timeout") }),
       },
     }
-    const tool = createResearchTool(client as any)
+    const tool = createResearchTool(client)
     const result = await tool.execute(
       { prompt: "Research something" },
       mockContext(testDir)
@@ -234,8 +235,8 @@ describe("research", () => {
 
 describe("programmer", () => {
   test("dispatches subtask to workflow-programmer with correct prompt", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createProgrammerTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createProgrammerTool(client)
     const result = await tool.execute(
       { prompt: "Implement the user registration endpoint" },
       mockContext(testDir)
@@ -249,8 +250,8 @@ describe("programmer", () => {
   })
 
   test("rejects empty prompt", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createProgrammerTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createProgrammerTool(client)
     const result = await tool.execute({ prompt: "" }, mockContext(testDir))
     assertErrorResult(JSON.parse(result), "EMPTY_PROMPT")
     expect(calls).toHaveLength(0)
@@ -263,7 +264,7 @@ describe("programmer", () => {
         prompt: mock(async () => { throw new Error("server error") }),
       },
     }
-    const tool = createProgrammerTool(client as any)
+    const tool = createProgrammerTool(client)
     const result = await tool.execute(
       { prompt: "Build something" },
       mockContext(testDir)
@@ -276,8 +277,8 @@ describe("programmer", () => {
 
 describe("review_spec", () => {
   test("dispatches subtask to workflow-reviewer for spec review", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewSpecTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewSpecTool(client)
     const result = await tool.execute(
       { filename: "my-feature-spec.md" },
       mockContext(testDir)
@@ -288,23 +289,23 @@ describe("review_spec", () => {
 
     expect(calls).toHaveLength(1)
     assertDispatchPayload(calls[0], "test-session", "workflow-reviewer", "my-feature-spec.md")
-    expect(calls[0].parts[0].prompt).toContain("spec")
+    expect(calls[0].body.parts[0].prompt).toContain("spec")
   })
 
   test("includes optional prompt in subtask", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewSpecTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewSpecTool(client)
     await tool.execute(
       { filename: "my-feature-spec.md", prompt: "Focus on security concerns" },
       mockContext(testDir)
     )
 
-    expect(calls[0].parts[0].prompt).toContain("Focus on security concerns")
+    expect(calls[0].body.parts[0].prompt).toContain("Focus on security concerns")
   })
 
   test("rejects invalid spec filename", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewSpecTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewSpecTool(client)
     const result = await tool.execute(
       { filename: "my-feature-plan.md" },
       mockContext(testDir)
@@ -314,8 +315,8 @@ describe("review_spec", () => {
   })
 
   test("rejects path traversal in filename", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewSpecTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewSpecTool(client)
     const result = await tool.execute(
       { filename: "../escape-spec.md" },
       mockContext(testDir)
@@ -325,8 +326,8 @@ describe("review_spec", () => {
   })
 
   test("rejects absolute path in filename", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewSpecTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewSpecTool(client)
     const result = await tool.execute(
       { filename: "/tmp/evil-spec.md" },
       mockContext(testDir)
@@ -342,7 +343,7 @@ describe("review_spec", () => {
         prompt: mock(async () => { throw new Error("dispatch error") }),
       },
     }
-    const tool = createReviewSpecTool(client as any)
+    const tool = createReviewSpecTool(client)
     const result = await tool.execute(
       { filename: "my-feature-spec.md" },
       mockContext(testDir)
@@ -355,8 +356,8 @@ describe("review_spec", () => {
 
 describe("review_plan", () => {
   test("dispatches subtask to workflow-reviewer for plan review", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewPlanTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewPlanTool(client)
     const result = await tool.execute(
       { filename: "my-feature-plan.md" },
       mockContext(testDir)
@@ -367,23 +368,23 @@ describe("review_plan", () => {
 
     expect(calls).toHaveLength(1)
     assertDispatchPayload(calls[0], "test-session", "workflow-reviewer", "my-feature-plan.md")
-    expect(calls[0].parts[0].prompt).toContain("plan")
+    expect(calls[0].body.parts[0].prompt).toContain("plan")
   })
 
   test("includes optional prompt in subtask", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewPlanTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewPlanTool(client)
     await tool.execute(
       { filename: "my-feature-plan.md", prompt: "Check task granularity" },
       mockContext(testDir)
     )
 
-    expect(calls[0].parts[0].prompt).toContain("Check task granularity")
+    expect(calls[0].body.parts[0].prompt).toContain("Check task granularity")
   })
 
   test("rejects invalid plan filename", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewPlanTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewPlanTool(client)
     const result = await tool.execute(
       { filename: "my-feature-spec.md" },
       mockContext(testDir)
@@ -393,8 +394,8 @@ describe("review_plan", () => {
   })
 
   test("rejects path traversal in filename", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewPlanTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewPlanTool(client)
     const result = await tool.execute(
       { filename: "../escape-plan.md" },
       mockContext(testDir)
@@ -404,8 +405,8 @@ describe("review_plan", () => {
   })
 
   test("rejects absolute path in filename", async () => {
-    const { client, calls } = createMockV2Client()
-    const tool = createReviewPlanTool(client as any)
+    const { client, calls } = createMockClient()
+    const tool = createReviewPlanTool(client)
     const result = await tool.execute(
       { filename: "/tmp/evil-plan.md" },
       mockContext(testDir)
@@ -421,7 +422,7 @@ describe("review_plan", () => {
         prompt: mock(async () => { throw new Error("dispatch error") }),
       },
     }
-    const tool = createReviewPlanTool(client as any)
+    const tool = createReviewPlanTool(client)
     const result = await tool.execute(
       { filename: "my-feature-plan.md" },
       mockContext(testDir)

@@ -10,7 +10,7 @@ describe("getSessionVariant", () => {
         }),
       },
     }
-    const variant = await getSessionVariant(mockClient as any, "sess-1")
+    const variant = await getSessionVariant(mockClient, "sess-1")
     expect(variant).toBe("thinking")
   })
 
@@ -22,7 +22,7 @@ describe("getSessionVariant", () => {
         }),
       },
     }
-    const variant = await getSessionVariant(mockClient as any, "sess-1")
+    const variant = await getSessionVariant(mockClient, "sess-1")
     expect(variant).toBeUndefined()
   })
 
@@ -32,7 +32,7 @@ describe("getSessionVariant", () => {
         get: async () => ({ data: {} }),
       },
     }
-    const variant = await getSessionVariant(mockClient as any, "sess-1")
+    const variant = await getSessionVariant(mockClient, "sess-1")
     expect(variant).toBeUndefined()
   })
 
@@ -42,7 +42,21 @@ describe("getSessionVariant", () => {
         get: async () => { throw new Error("network error") },
       },
     }
-    const variant = await getSessionVariant(mockClient as any, "sess-1")
+    const variant = await getSessionVariant(mockClient, "sess-1")
     expect(variant).toBeUndefined()
+  })
+
+  test("passes sessionID to client.session.get via v1 path shape", async () => {
+    let capturedOptions: any
+    const mockClient = {
+      session: {
+        get: async (opts: any) => {
+          capturedOptions = opts
+          return { data: { model: { variant: "thinking" } } }
+        },
+      },
+    }
+    await getSessionVariant(mockClient, "sess-42")
+    expect(capturedOptions.path.id).toBe("sess-42")
   })
 })
