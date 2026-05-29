@@ -142,7 +142,7 @@ export function createCommandHook(
     const args = (input.arguments || "").trim()
     const entryPrompt = ENTRY_PROMPTS[phase](args)
 
-    // Submit entry prompt to session with noReply.
+    // Submit entry prompt to session.
     // Agent switching is handled by two complementary mechanisms:
     // 1. The command config's `agent` field (set in createConfigHook) tells opencode
     //    to switch the session's active agent when the command is invoked.
@@ -150,11 +150,9 @@ export function createCommandHook(
     //    is routed to the correct agent.
     // The throw below aborts the command template pipeline but does NOT undo
     // the agent switch — this follows the same pattern used by the DCP plugin.
-    // Runtime verification of this behavior is in Chunk 5, Task 13, Steps 5-6.
     await client.session.prompt({
       path: { id: input.sessionID },
       body: {
-        noReply: true,
         agent,
         parts: [{ type: "text", text: entryPrompt }],
       },

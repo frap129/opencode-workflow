@@ -204,7 +204,7 @@ describe("createCommandHook", () => {
     expect(client.calls).toHaveLength(1)
     const call = client.calls[0]
     expect(call.path.id).toBe("sess-1")
-    expect(call.body.noReply).toBe(true)
+    expect(call.body.noReply).toBeUndefined()
     expect(call.body.agent).toBe("workflow-brainstorm")
     expect(call.body.parts).toHaveLength(1)
     expect(call.body.parts[0].type).toBe("text")
