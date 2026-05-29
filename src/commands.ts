@@ -11,6 +11,7 @@ import {
   type BootstrapStatus,
 } from "./bootstrap"
 import type { AgentName } from "./constants"
+import { getSessionVariant, type V2Client } from "./session"
 
 /**
  * Phase entry prompt templates.
@@ -85,6 +86,7 @@ export function createConfigHook() {
  */
 export function createCommandHook(
   client: any,
+  v2Client: V2Client,
   projectDir: string,
   checkBootstrapFn: (dir: string) => Promise<BootstrapStatus> = defaultCheckBootstrap,
   runBootstrapFn: (dir: string) => Promise<void> = defaultRunBootstrap,
@@ -99,12 +101,12 @@ export function createCommandHook(
     // Handle workflow-init: force-write all agent files
     if (input.command === "workflow-init") {
       await forceBootstrapFn(projectDir)
-      await client.session.prompt({
-        path: { id: input.sessionID },
-        body: {
-          noReply: true,
-          parts: [{ type: "text", text: "Workflow agent files regenerated (7 agents written to .opencode/agents/)." }],
-        },
+      const initVariant = await getSessionVariant(v2Client, input.sessionID)
+      await v2Client.session.prompt({
+        sessionID: input.sessionID,
+        noReply: true,
+        variant: initVariant,
+        parts: [{ type: "text", text: "Workflow agent files regenerated (7 agents written to .opencode/agents/)." }],
       })
       throw new Error("__WORKFLOW_HANDLED__")
     }
@@ -137,12 +139,12 @@ export function createCommandHook(
     //    is routed to the correct agent.
     // The throw below aborts the command template pipeline but does NOT undo
     // the agent switch — this follows the same pattern used by the DCP plugin.
-    await client.session.prompt({
-      path: { id: input.sessionID },
-      body: {
-        agent,
-        parts: [{ type: "text", text: entryPrompt }],
-      },
+    const variant = await getSessionVariant(v2Client, input.sessionID)
+    await v2Client.session.prompt({
+      sessionID: input.sessionID,
+      agent,
+      variant,
+      parts: [{ type: "text", text: entryPrompt }],
     })
 
     // Abort the command pipeline so opencode doesn't also send the template

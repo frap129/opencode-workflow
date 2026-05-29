@@ -56,11 +56,14 @@ describe("createCommandHook", () => {
    * Mock client for capturing session.prompt() calls.
    * Returns the calls array for inspection.
    */
-  function mockClient() {
+  function mockV2Client(variant?: string) {
     const calls: any[] = []
     return {
       calls,
       session: {
+        get: async () => ({
+          data: variant ? { model: { variant } } : {},
+        }),
         prompt: async (opts: any) => {
           calls.push(opts)
           return { data: {} }
@@ -104,9 +107,10 @@ describe("createCommandHook", () => {
   }
 
   test("brainstorm command submits entry prompt with correct agent", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready")
     )
@@ -116,20 +120,21 @@ describe("createCommandHook", () => {
     })
 
     // Should have submitted a prompt to the session
-    expect(client.calls).toHaveLength(1)
-    const call = client.calls[0]
-    expect(call.path.id).toBe("sess-1")
-    expect(call.body.noReply).toBeUndefined()
-    expect(call.body.agent).toBe("workflow-brainstorm")
-    expect(call.body.parts).toHaveLength(1)
-    expect(call.body.parts[0].type).toBe("text")
-    expect(call.body.parts[0].text).toContain("design a login page")
+    expect(v2Client.calls).toHaveLength(1)
+    const call = v2Client.calls[0]
+    expect(call.sessionID).toBe("sess-1")
+    expect(call.noReply).toBeUndefined()
+    expect(call.agent).toBe("workflow-brainstorm")
+    expect(call.parts).toHaveLength(1)
+    expect(call.parts[0].type).toBe("text")
+    expect(call.parts[0].text).toContain("design a login page")
   })
 
   test("plan command submits entry prompt with correct agent", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready")
     )
@@ -138,16 +143,17 @@ describe("createCommandHook", () => {
       command: "plan", sessionID: "sess-1", arguments: "implement auth flow",
     })
 
-    expect(client.calls).toHaveLength(1)
-    const call = client.calls[0]
-    expect(call.body.agent).toBe("workflow-plan")
-    expect(call.body.parts[0].text).toContain("implement auth flow")
+    expect(v2Client.calls).toHaveLength(1)
+    const call = v2Client.calls[0]
+    expect(call.agent).toBe("workflow-plan")
+    expect(call.parts[0].text).toContain("implement auth flow")
   })
 
   test("implement command submits entry prompt with correct agent", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready")
     )
@@ -156,16 +162,17 @@ describe("createCommandHook", () => {
       command: "implement", sessionID: "sess-1", arguments: "build the auth module",
     })
 
-    expect(client.calls).toHaveLength(1)
-    const call = client.calls[0]
-    expect(call.body.agent).toBe("workflow-implement")
-    expect(call.body.parts[0].text).toContain("build the auth module")
+    expect(v2Client.calls).toHaveLength(1)
+    const call = v2Client.calls[0]
+    expect(call.agent).toBe("workflow-implement")
+    expect(call.parts[0].text).toContain("build the auth module")
   })
 
   test("ignores non-workflow commands (does not throw)", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready")
     )
@@ -175,12 +182,12 @@ describe("createCommandHook", () => {
     // Should return normally without throwing
     await hook(input, output)
 
-    expect(client.calls).toHaveLength(0)
+    expect(v2Client.calls).toHaveLength(0)
   })
 
   test("triggers bootstrap on needs-bootstrap status", async () => {
     let bootstrapCalled = false
-    const client = mockClient()
+    const v2Client = mockV2Client()
 
     // First call returns needs-bootstrap, runBootstrap sets it to ready,
     // second call returns ready
@@ -192,7 +199,8 @@ describe("createCommandHook", () => {
     }
 
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       dynamicCheck,
       async (_dir: string) => { bootstrapCalled = true }
@@ -204,13 +212,14 @@ describe("createCommandHook", () => {
 
     expect(bootstrapCalled).toBe(true)
     // After bootstrap, the command should still submit the entry prompt
-    expect(client.calls).toHaveLength(1)
+    expect(v2Client.calls).toHaveLength(1)
   })
 
   test("throws on partial bootstrap (does not auto-fix)", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("partial")
     )
@@ -220,13 +229,14 @@ describe("createCommandHook", () => {
 
     // Should throw with the partial bootstrap error, NOT __WORKFLOW_HANDLED__
     await expect(hook(input, output)).rejects.toThrow("partial agent installation")
-    expect(client.calls).toHaveLength(0)
+    expect(v2Client.calls).toHaveLength(0)
   })
 
   test("entry prompt includes user arguments when provided", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready")
     )
@@ -235,14 +245,15 @@ describe("createCommandHook", () => {
       command: "brainstorm", sessionID: "sess-1", arguments: "user request here",
     })
 
-    const promptText = client.calls[0].body.parts[0].text
+    const promptText = v2Client.calls[0].parts[0].text
     expect(promptText).toContain("user request here")
   })
 
   test("entry prompt works with empty arguments", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready")
     )
@@ -251,16 +262,17 @@ describe("createCommandHook", () => {
       command: "brainstorm", sessionID: "sess-1", arguments: "",
     })
 
-    expect(client.calls).toHaveLength(1)
+    expect(v2Client.calls).toHaveLength(1)
     // Should still submit a valid entry prompt even without args
-    expect(client.calls[0].body.parts[0].type).toBe("text")
-    expect(client.calls[0].body.parts[0].text.length).toBeGreaterThan(0)
+    expect(v2Client.calls[0].parts[0].type).toBe("text")
+    expect(v2Client.calls[0].parts[0].text.length).toBeGreaterThan(0)
   })
 
   test("aborts command pipeline after submitting entry prompt", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready")
     )
@@ -273,13 +285,14 @@ describe("createCommandHook", () => {
     await expect(hook(input, output)).rejects.toThrow("__WORKFLOW_HANDLED__")
 
     // But it should have submitted the prompt before throwing
-    expect(client.calls).toHaveLength(1)
+    expect(v2Client.calls).toHaveLength(1)
   })
 
   test("re-running same command is a fresh invocation (no toggle state)", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready")
     )
@@ -295,16 +308,17 @@ describe("createCommandHook", () => {
     })
 
     // Both should produce entry prompts (no toggle-off behavior)
-    expect(client.calls).toHaveLength(2)
-    expect(client.calls[0].body.parts[0].text).toContain("first topic")
-    expect(client.calls[1].body.parts[0].text).toContain("second topic")
+    expect(v2Client.calls).toHaveLength(2)
+    expect(v2Client.calls[0].parts[0].text).toContain("first topic")
+    expect(v2Client.calls[1].parts[0].text).toContain("second topic")
   })
 
   test("workflow-init calls forceBootstrap and posts confirmation with noReply", async () => {
     let forceBootstrapCalled = false
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready"),
       async () => {},
@@ -316,15 +330,16 @@ describe("createCommandHook", () => {
     })
 
     expect(forceBootstrapCalled).toBe(true)
-    expect(client.calls).toHaveLength(1)
-    expect(client.calls[0].body.noReply).toBe(true)
-    expect(client.calls[0].body.parts[0].text).toContain("regenerated")
+    expect(v2Client.calls).toHaveLength(1)
+    expect(v2Client.calls[0].noReply).toBe(true)
+    expect(v2Client.calls[0].parts[0].text).toContain("regenerated")
   })
 
   test("workflow-init throws __WORKFLOW_HANDLED__", async () => {
-    const client = mockClient()
+    const v2Client = mockV2Client()
     const hook = createCommandHook(
-      client as any,
+      null,
+      v2Client as any,
       "/test/project",
       mockBootstrapCheck("ready"),
       async () => {},
@@ -334,5 +349,40 @@ describe("createCommandHook", () => {
     const input = { command: "workflow-init", sessionID: "sess-1", arguments: "" }
     const output = { parts: [] as any[] }
     await expect(hook(input, output)).rejects.toThrow("__WORKFLOW_HANDLED__")
+  })
+
+  test("preserves model variant when switching to brainstorm agent", async () => {
+    const v2Client = mockV2Client("thinking")
+    const hook = createCommandHook(
+      null,
+      v2Client as any,
+      "/test/project",
+      mockBootstrapCheck("ready")
+    )
+
+    await invokeWorkflowCommand(hook, {
+      command: "brainstorm", sessionID: "sess-1", arguments: "test",
+    })
+
+    expect(v2Client.calls).toHaveLength(1)
+    expect(v2Client.calls[0].variant).toBe("thinking")
+    expect(v2Client.calls[0].sessionID).toBe("sess-1")
+  })
+
+  test("works without variant set (variant is undefined)", async () => {
+    const v2Client = mockV2Client()
+    const hook = createCommandHook(
+      null,
+      v2Client as any,
+      "/test/project",
+      mockBootstrapCheck("ready")
+    )
+
+    await invokeWorkflowCommand(hook, {
+      command: "brainstorm", sessionID: "sess-1", arguments: "test",
+    })
+
+    expect(v2Client.calls).toHaveLength(1)
+    expect(v2Client.calls[0].variant).toBeUndefined()
   })
 })

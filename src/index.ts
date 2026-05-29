@@ -14,6 +14,7 @@ import {
   createReviewPlanTool,
 } from "./tools/wrappers"
 import { createConfigHook, createCommandHook } from "./commands"
+import { createV2Client } from "./session"
 
 /**
  * Creates the workflow plugin hooks object.
@@ -27,7 +28,8 @@ export async function createPlugin(ctx: {
   serverUrl: URL
   $: any
 }) {
-  const { client, directory } = ctx
+  const { client, directory, serverUrl } = ctx
+  const v2Client = createV2Client(serverUrl, directory)
 
   return {
     tool: {
@@ -47,7 +49,7 @@ export async function createPlugin(ctx: {
 
     config: createConfigHook(),
 
-    "command.execute.before": createCommandHook(client, directory),
+    "command.execute.before": createCommandHook(client, v2Client, directory),
   }
 }
 
