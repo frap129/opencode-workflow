@@ -39,12 +39,12 @@ export async function createPlugin(ctx: {
       read_plan: createReadPlanTool(),
       write_plan: createWritePlanTool(),
 
-      // Wrapper tools (need client for subtask dispatch)
-      explore: createExploreTool(client),
-      research: createResearchTool(client),
-      programmer: createProgrammerTool(client),
-      review_spec: createReviewSpecTool(client),
-      review_plan: createReviewPlanTool(client),
+      // Wrapper tools (need v2Client for subtask dispatch)
+      explore: createExploreTool(v2Client),
+      research: createResearchTool(v2Client),
+      programmer: createProgrammerTool(v2Client),
+      review_spec: createReviewSpecTool(v2Client),
+      review_plan: createReviewPlanTool(v2Client),
     },
 
     config: createConfigHook(),
