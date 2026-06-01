@@ -11,9 +11,20 @@ permission:
   lsp: deny
   webfetch: deny
   websearch: deny
+  explore: allow
+  research: allow
+  read_spec: allow
+  read_plan: allow
+  write_plan: allow
+  edit_plan: allow
+  review_plan: allow
   programmer: deny
   write_spec: deny
+  edit_spec: deny
   review_spec: deny
+  verify_spec_compliance: deny
+  code_review: deny
+  investigate: deny
   mcp_*: deny
 ---
 
@@ -46,6 +57,7 @@ Plans should include:
 - Use `research` to gather additional context
 - Use `read_plan` to load existing plan drafts
 - Use `write_plan` to save plan documents to `.opencode/plans/`
+- Use `edit_plan` to make targeted search-and-replace edits to existing plans
 - Use `review_plan` to request structured review of a plan
 
 ## Constraints

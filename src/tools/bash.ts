@@ -42,20 +42,29 @@ export function createBashTool(options?: { timeoutMs?: number; outputLimitBytes?
       })
 
       let timedOut = false
+      let timer: ReturnType<typeof setTimeout>
       const timeoutPromise = new Promise<void>((resolve) => {
-        setTimeout(() => {
+        timer = setTimeout(() => {
           timedOut = true
           proc.kill()
           resolve()
         }, timeoutMs)
       })
 
-      await Promise.race([proc.exited, timeoutPromise])
+      const raceResult = await Promise.race([proc.exited, timeoutPromise])
+      clearTimeout(timer!)
 
-      const exitCode = timedOut ? null : await proc.exited
+      const exitCode = timedOut ? null : (raceResult as number)
 
-      const rawStdout = await new Response(proc.stdout).text()
-      const rawStderr = await new Response(proc.stderr).text()
+      const safeRead = (stream: ReadableStream | null | undefined): Promise<string> => {
+        if (!stream) return Promise.resolve("")
+        const text = new Response(stream).text()
+        if (!timedOut) return text
+        return Promise.race([text, new Promise<string>((r) => setTimeout(() => r(""), 5_000))])
+      }
+
+      const rawStdout = await safeRead(proc.stdout)
+      const rawStderr = await safeRead(proc.stderr)
 
       const truncatedStdout = truncateOutput(rawStdout, outputLimitBytes)
       const truncatedStderr = truncateOutput(rawStderr, outputLimitBytes)

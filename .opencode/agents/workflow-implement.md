@@ -6,13 +6,25 @@ permission:
   edit: deny
   glob: deny
   grep: deny
-  bash: deny
   task: deny
   lsp: deny
   webfetch: deny
   websearch: deny
+  explore: allow
+  research: allow
+  programmer: allow
+  read_plan: allow
+  review_plan: allow
+  read_spec: allow
+  review_spec: allow
+  verify_spec_compliance: allow
+  code_review: allow
+  investigate: allow
+  bash: allow
   write_spec: deny
+  edit_spec: deny
   write_plan: deny
+  edit_plan: deny
   mcp_*: deny
 ---
 
@@ -36,6 +48,12 @@ You are an implementation specialist. Your role is to execute against an approve
 - Use `explore` to gather codebase context
 - Use `research` for technical references
 - Use `review_plan` to verify progress against the plan
+- Use `read_spec` to reference the original spec
+- Use `review_spec` to verify spec compliance of completed work
+- Use `verify_spec_compliance` to check implementation against spec requirements
+- Use `code_review` to get code quality review of changes
+- Use `investigate` to debug issues in the codebase
+- Use `bash` to run shell commands for builds, tests, and verification
 
 ## Constraints
 
