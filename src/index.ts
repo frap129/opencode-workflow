@@ -18,7 +18,6 @@ import {
   createCodeReviewTool,
   createInvestigateTool,
 } from "./tools/wrappers"
-import { createBashTool } from "./tools/bash"
 import { createConfigHook, createCommandHook } from "./commands"
 import { createChatMessageHook } from "./session"
 import { updateState } from "./state"
@@ -55,7 +54,6 @@ export async function createPlugin(ctx: {
       verify_spec_compliance: createVerifySpecComplianceTool(client),
       code_review: createCodeReviewTool(client),
       investigate: createInvestigateTool(client),
-      bash: createBashTool(),
     },
 
     config: createConfigHook(),

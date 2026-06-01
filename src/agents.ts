@@ -14,7 +14,6 @@ permission:
   edit: deny
   glob: deny
   grep: deny
-  bash: deny
   task: deny
   lsp: deny
   webfetch: deny
@@ -75,7 +74,6 @@ permission:
   edit: deny
   glob: deny
   grep: deny
-  bash: deny
   task: deny
   lsp: deny
   webfetch: deny
@@ -159,7 +157,6 @@ permission:
   verify_spec_compliance: allow
   code_review: allow
   investigate: allow
-  bash: allow
   write_spec: deny
   edit_spec: deny
   write_plan: deny
@@ -192,7 +189,6 @@ You are an implementation specialist. Your role is to execute against an approve
 - Use \`verify_spec_compliance\` to check implementation against spec requirements
 - Use \`code_review\` to get code quality review of changes
 - Use \`investigate\` to debug issues in the codebase
-- Use \`bash\` to run shell commands for builds, tests, and verification
 
 ## Constraints
 
@@ -206,7 +202,6 @@ name: workflow-explore
 mode: subagent
 permission:
   edit: deny
-  bash: deny
 ---
 
 # Workflow Explore Agent
@@ -233,7 +228,6 @@ name: workflow-research
 mode: subagent
 permission:
   edit: deny
-  bash: deny
 ---
 
 # Workflow Research Agent
@@ -283,7 +277,7 @@ You are a focused implementation specialist. Your role is to perform specific co
 
 - Stay focused on the specific delegated task
 - Follow existing codebase conventions
-- Use standard opencode implementation tools (edit, bash, etc.)
+- Use standard opencode implementation tools (edit, etc.)
 - Report blockers clearly rather than working around them
 `,
 
@@ -292,7 +286,6 @@ name: workflow-reviewer
 mode: subagent
 permission:
   edit: deny
-  bash: deny
 ---
 
 # Workflow Reviewer Agent

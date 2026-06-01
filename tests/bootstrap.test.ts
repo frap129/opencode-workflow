@@ -393,28 +393,6 @@ describe("getAgentContent", () => {
       "verify_spec_compliance: deny",
       "code_review: deny",
       "investigate: deny",
-      "bash: deny",
-    ])
-  })
-
-  test("workflow-plan frontmatter matches plan phase tool matrix", () => {
-    const content = getAgentContent("workflow-plan")
-    expectPermissionLines(content, [
-      "explore: allow",
-      "research: allow",
-      "read_spec: allow",
-      "read_plan: allow",
-      "write_plan: allow",
-      "edit_plan: allow",
-      "review_plan: allow",
-      "programmer: deny",
-      "write_spec: deny",
-      "edit_spec: deny",
-      "review_spec: deny",
-      "verify_spec_compliance: deny",
-      "code_review: deny",
-      "investigate: deny",
-      "bash: deny",
     ])
   })
 
@@ -431,7 +409,6 @@ describe("getAgentContent", () => {
       "verify_spec_compliance: allow",
       "code_review: allow",
       "investigate: allow",
-      "bash: allow",
       "write_spec: deny",
       "edit_spec: deny",
       "write_plan: deny",
@@ -449,7 +426,6 @@ describe("getAgentContent", () => {
     expect(implement).toContain("verify_spec_compliance")
     expect(implement).toContain("code_review")
     expect(implement).toContain("investigate")
-    expect(implement).toContain("bash")
     expect(implement).toContain("review_spec")
     expect(implement).toContain("read_spec")
   })

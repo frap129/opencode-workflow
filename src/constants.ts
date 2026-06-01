@@ -35,21 +35,21 @@ export const PHASE_TOOL_MATRIX: Record<PhaseName, { allowed: string[]; hidden: s
     allowed: ["explore", "research", "read_spec", "write_spec", "edit_spec", "review_spec"],
     hidden: [
       "programmer", "review_plan", "read_plan", "write_plan", "edit_plan",
-      "verify_spec_compliance", "code_review", "investigate", "bash",
+      "verify_spec_compliance", "code_review", "investigate",
     ],
   },
   plan: {
     allowed: ["explore", "research", "read_spec", "read_plan", "write_plan", "edit_plan", "review_plan"],
     hidden: [
       "programmer", "write_spec", "edit_spec", "review_spec",
-      "verify_spec_compliance", "code_review", "investigate", "bash",
+      "verify_spec_compliance", "code_review", "investigate",
     ],
   },
   implement: {
     allowed: [
       "explore", "research", "programmer", "read_plan", "review_plan",
       "read_spec", "review_spec", "verify_spec_compliance", "code_review",
-      "investigate", "bash",
+      "investigate",
     ],
     hidden: ["write_spec", "edit_spec", "write_plan", "edit_plan"],
   },

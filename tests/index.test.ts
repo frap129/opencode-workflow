@@ -30,12 +30,11 @@ describe("createPlugin", () => {
     expect(hooks["command.execute.before"]).toBeDefined()
   })
 
-  test("createPlugin registers all 15 workflow tools", async () => {
+  test("createPlugin registers all 14 workflow tools", async () => {
     const hooks = await createPlugin(mockPluginInput())
     const toolNames = Object.keys(hooks.tool).sort()
 
     expect(toolNames).toEqual([
-      "bash",
       "code_review",
       "edit_plan",
       "edit_spec",
