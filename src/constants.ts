@@ -30,21 +30,28 @@ export const SPEC_FILENAME_REGEX = /^[a-z0-9][a-z0-9._-]*-spec\.md$/
 export const PLAN_FILENAME_REGEX = /^[a-z0-9][a-z0-9._-]*-plan\.md$/
 
 /** Phase tool matrix: which workflow tools are allowed/hidden per phase */
-export const PHASE_TOOL_MATRIX: Record<
-  PhaseName,
-  { allowed: string[]; hidden: string[] }
-> = {
+export const PHASE_TOOL_MATRIX: Record<PhaseName, { allowed: string[]; hidden: string[] }> = {
   brainstorm: {
-    allowed: ["explore", "research", "read_spec", "write_spec", "review_spec"],
-    hidden: ["programmer", "review_plan", "read_plan", "write_plan"],
+    allowed: ["explore", "research", "read_spec", "write_spec", "edit_spec", "review_spec"],
+    hidden: [
+      "programmer", "review_plan", "read_plan", "write_plan", "edit_plan",
+      "verify_spec_compliance", "code_review", "investigate", "bash",
+    ],
   },
   plan: {
-    allowed: ["explore", "research", "read_spec", "read_plan", "write_plan", "review_plan"],
-    hidden: ["programmer", "write_spec", "review_spec"],
+    allowed: ["explore", "research", "read_spec", "read_plan", "write_plan", "edit_plan", "review_plan"],
+    hidden: [
+      "programmer", "write_spec", "edit_spec", "review_spec",
+      "verify_spec_compliance", "code_review", "investigate", "bash",
+    ],
   },
   implement: {
-    allowed: ["explore", "research", "programmer", "read_plan", "review_plan"],
-    hidden: ["write_spec", "write_plan"],
+    allowed: [
+      "explore", "research", "programmer", "read_plan", "review_plan",
+      "read_spec", "review_spec", "verify_spec_compliance", "code_review",
+      "investigate", "bash",
+    ],
+    hidden: ["write_spec", "edit_spec", "write_plan", "edit_plan"],
   },
 }
 

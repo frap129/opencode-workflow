@@ -70,33 +70,50 @@ describe("PHASE_AGENT_MAP", () => {
 })
 
 describe("PHASE_TOOL_MATRIX", () => {
-  test("brainstorm phase has correct tools", () => {
-    const bs = PHASE_TOOL_MATRIX.brainstorm
-    expect(bs.allowed).toEqual(
-      expect.arrayContaining(["explore", "research", "read_spec", "write_spec", "review_spec"])
-    )
-    expect(bs.hidden).toEqual(
-      expect.arrayContaining(["programmer", "review_plan", "read_plan", "write_plan"])
-    )
+  test("brainstorm phase allows 6 tools and hides 9", () => {
+    const { allowed, hidden } = PHASE_TOOL_MATRIX.brainstorm
+    expect(allowed).toEqual([
+      "explore", "research", "read_spec", "write_spec", "edit_spec", "review_spec",
+    ])
+    expect(hidden).toEqual([
+      "programmer", "review_plan", "read_plan", "write_plan", "edit_plan",
+      "verify_spec_compliance", "code_review", "investigate", "bash",
+    ])
   })
 
-  test("plan phase has correct tools", () => {
-    const pl = PHASE_TOOL_MATRIX.plan
-    expect(pl.allowed).toEqual(
-      expect.arrayContaining(["explore", "research", "read_spec", "read_plan", "write_plan", "review_plan"])
-    )
-    expect(pl.hidden).toEqual(
-      expect.arrayContaining(["programmer", "write_spec", "review_spec"])
-    )
+  test("plan phase allows 7 tools and hides 8", () => {
+    const { allowed, hidden } = PHASE_TOOL_MATRIX.plan
+    expect(allowed).toEqual([
+      "explore", "research", "read_spec", "read_plan", "write_plan", "edit_plan", "review_plan",
+    ])
+    expect(hidden).toEqual([
+      "programmer", "write_spec", "edit_spec", "review_spec",
+      "verify_spec_compliance", "code_review", "investigate", "bash",
+    ])
   })
 
-  test("implement phase has correct tools", () => {
-    const im = PHASE_TOOL_MATRIX.implement
-    expect(im.allowed).toEqual(
-      expect.arrayContaining(["explore", "research", "programmer", "read_plan", "review_plan"])
-    )
-    expect(im.hidden).toEqual(
-      expect.arrayContaining(["write_spec", "write_plan"])
-    )
+  test("implement phase allows 11 tools and hides 4", () => {
+    const { allowed, hidden } = PHASE_TOOL_MATRIX.implement
+    expect(allowed).toEqual([
+      "explore", "research", "programmer", "read_plan", "review_plan",
+      "read_spec", "review_spec", "verify_spec_compliance", "code_review",
+      "investigate", "bash",
+    ])
+    expect(hidden).toEqual([
+      "write_spec", "edit_spec", "write_plan", "edit_plan",
+    ])
+  })
+
+  test("all 15 tools appear in every phase (allowed + hidden)", () => {
+    const ALL_TOOLS = [
+      "explore", "research", "read_spec", "write_spec", "edit_spec", "review_spec",
+      "read_plan", "write_plan", "edit_plan", "review_plan",
+      "programmer", "verify_spec_compliance", "code_review", "investigate", "bash",
+    ]
+
+    for (const phase of ["brainstorm", "plan", "implement"] as const) {
+      const { allowed, hidden } = PHASE_TOOL_MATRIX[phase]
+      expect([...allowed, ...hidden].sort()).toEqual([...ALL_TOOLS].sort())
+    }
   })
 })
