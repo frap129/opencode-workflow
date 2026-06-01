@@ -5,6 +5,8 @@ import {
   createWriteSpecTool,
   createReadPlanTool,
   createWritePlanTool,
+  createEditSpecTool,
+  createEditPlanTool,
 } from "./tools/artifacts"
 import {
   createExploreTool,
@@ -12,9 +14,14 @@ import {
   createProgrammerTool,
   createReviewSpecTool,
   createReviewPlanTool,
+  createVerifySpecComplianceTool,
+  createCodeReviewTool,
+  createInvestigateTool,
 } from "./tools/wrappers"
+import { createBashTool } from "./tools/bash"
 import { createConfigHook, createCommandHook } from "./commands"
 import { createChatMessageHook } from "./session"
+import { updateState } from "./state"
 
 /**
  * Creates the workflow plugin hooks object.
@@ -32,11 +39,12 @@ export async function createPlugin(ctx: {
 
   return {
     tool: {
-      // Artifact tools
       read_spec: createReadSpecTool(),
       write_spec: createWriteSpecTool(),
+      edit_spec: createEditSpecTool(),
       read_plan: createReadPlanTool(),
       write_plan: createWritePlanTool(),
+      edit_plan: createEditPlanTool(),
 
       // Wrapper tools (need client for subtask dispatch)
       explore: createExploreTool(client),
@@ -44,13 +52,17 @@ export async function createPlugin(ctx: {
       programmer: createProgrammerTool(client),
       review_spec: createReviewSpecTool(client),
       review_plan: createReviewPlanTool(client),
+      verify_spec_compliance: createVerifySpecComplianceTool(client),
+      code_review: createCodeReviewTool(client),
+      investigate: createInvestigateTool(client),
+      bash: createBashTool(),
     },
 
     config: createConfigHook(),
 
     "chat.message": createChatMessageHook(),
 
-    "command.execute.before": createCommandHook(client, directory),
+    "command.execute.before": createCommandHook(client, directory, undefined, undefined, undefined, updateState),
   }
 }
 

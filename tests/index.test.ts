@@ -30,26 +30,32 @@ describe("createPlugin", () => {
     expect(hooks["command.execute.before"]).toBeDefined()
   })
 
-  test("registers all 9 workflow tools", async () => {
+  test("createPlugin registers all 15 workflow tools", async () => {
     const hooks = await createPlugin(mockPluginInput())
+    const toolNames = Object.keys(hooks.tool).sort()
 
-    const toolNames = Object.keys(hooks.tool!)
-    expect(toolNames).toHaveLength(9)
-    expect(toolNames).toContain("explore")
-    expect(toolNames).toContain("research")
-    expect(toolNames).toContain("programmer")
-    expect(toolNames).toContain("review_spec")
-    expect(toolNames).toContain("review_plan")
-    expect(toolNames).toContain("read_spec")
-    expect(toolNames).toContain("write_spec")
-    expect(toolNames).toContain("read_plan")
-    expect(toolNames).toContain("write_plan")
+    expect(toolNames).toEqual([
+      "bash",
+      "code_review",
+      "edit_plan",
+      "edit_spec",
+      "explore",
+      "investigate",
+      "programmer",
+      "read_plan",
+      "read_spec",
+      "research",
+      "review_plan",
+      "review_spec",
+      "verify_spec_compliance",
+      "write_plan",
+      "write_spec",
+    ])
   })
 
-  test("each tool has execute function", async () => {
+  test("every registered workflow tool exposes an execute function", async () => {
     const hooks = await createPlugin(mockPluginInput())
-
-    for (const [name, toolDef] of Object.entries(hooks.tool!)) {
+    for (const toolDef of Object.values(hooks.tool)) {
       expect(typeof (toolDef as any).execute).toBe("function")
     }
   })
