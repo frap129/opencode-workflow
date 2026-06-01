@@ -10,8 +10,13 @@ import {
   INVESTIGATE_TEMPLATE,
   SPEC_DOCUMENT_REVIEWER_TEMPLATE,
   PLAN_DOCUMENT_REVIEWER_TEMPLATE,
+  PROGRAMMER_TEMPLATE,
+  SPEC_REVIEWER_TEMPLATE,
+  CODE_QUALITY_REVIEWER_TEMPLATE,
 } from "../prompts"
 import { getCachedVariant } from "../session"
+import { getHeadSha as defaultGetHeadSha } from "../git"
+import { getState as defaultGetState, updateState as defaultUpdateState } from "../state"
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -182,30 +187,50 @@ export function createResearchTool(client: any) {
 
 /**
  * Create the `programmer` wrapper tool.
- * Dispatches implementation work to workflow-programmer.
+ * Dispatches implementation work to workflow-programmer using the programmer template.
  */
-export function createProgrammerTool(client: any) {
+export function createProgrammerTool(
+  client: any,
+  deps: {
+    getHeadSha?: typeof defaultGetHeadSha
+    updateState?: typeof defaultUpdateState
+  } = {}
+) {
+  const getHeadSha = deps.getHeadSha ?? defaultGetHeadSha
+  const updateState = deps.updateState ?? defaultUpdateState
+
   return tool({
-    description:
-      "Dispatch an implementation task to the workflow-programmer subagent. " +
-      "Use this for writing code, creating files, running commands, and executing implementation work. " +
-      "Runs as a native child session.",
+    description: "Dispatch an implementation task to the workflow-programmer subagent using the programmer template.",
     args: {
-      prompt: tool.schema.string().describe(
-        "What to implement. Include relevant context, file paths, and specific requirements."
-      ),
+      task_name: tool.schema.string().describe("Short task name for the implementation subtask."),
+      prompt: tool.schema.string().describe("Full task text to implement."),
+      context: tool.schema.string().optional().describe("Optional scene-setting context."),
     },
     async execute(args, context) {
       const promptError = validatePrompt(args.prompt)
       if (promptError) return promptError
+      const taskNameError = validatePrompt(args.task_name)
+      if (taskNameError) {
+        return errorResult("Invalid task name", "Task name must be non-empty.", "EMPTY_TASK_NAME")
+      }
+
+      const lastBaseSha = await getHeadSha(context.directory)
+      updateState({ lastBaseSha })
+
+      const prompt = fillTemplate(PROGRAMMER_TEMPLATE, {
+        "task name": args.task_name.trim(),
+        "FULL TEXT of task": args.prompt.trim(),
+        "Scene-setting context": args.context?.trim() ?? "No additional context provided.",
+        directory: context.directory,
+      })
 
       return dispatchSubtask(
         client,
         context.sessionID,
         context.agent,
         "workflow-programmer",
-        args.prompt.trim(),
-        `Implement: ${args.prompt.trim().slice(0, 80)}`,
+        prompt,
+        `Implement: ${args.task_name.trim()}`,
         context.metadata
       )
     },
@@ -328,6 +353,105 @@ export function createReviewPlanTool(client: any) {
         "workflow-reviewer",
         reviewPrompt,
         `Review plan: ${args.filename}`,
+        context.metadata
+      )
+    },
+  })
+}
+
+/**
+ * Create the `verify_spec_compliance` wrapper tool.
+ * Dispatches spec-compliance review to workflow-reviewer.
+ */
+export function createVerifySpecComplianceTool(client: any) {
+  return tool({
+    description: "Dispatch a spec-compliance review using the reviewer template.",
+    args: {
+      requirements: tool.schema.string().describe("Full text of the requested requirements."),
+      report: tool.schema.string().describe("Implementer report describing what was built."),
+    },
+    async execute(args, context) {
+      const requirementsError = validatePrompt(args.requirements)
+      if (requirementsError) {
+        return errorResult("Invalid requirements", "Requirements must be non-empty.", "EMPTY_REQUIREMENTS")
+      }
+      const reportError = validatePrompt(args.report)
+      if (reportError) {
+        return errorResult("Invalid report", "Report must be non-empty.", "EMPTY_REPORT")
+      }
+
+      const prompt = fillTemplate(SPEC_REVIEWER_TEMPLATE, {
+        "FULL TEXT of task requirements": args.requirements.trim(),
+        "From implementer's report": args.report.trim(),
+      })
+
+      return dispatchSubtask(
+        client,
+        context.sessionID,
+        context.agent,
+        "workflow-reviewer",
+        prompt,
+        "Verify spec compliance",
+        context.metadata
+      )
+    },
+  })
+}
+
+/**
+ * Create the `code_review` wrapper tool.
+ * Dispatches a code quality review using git SHAs to scope the change.
+ */
+export function createCodeReviewTool(
+  client: any,
+  deps: {
+    getState?: typeof defaultGetState
+    getHeadSha?: typeof defaultGetHeadSha
+  } = {}
+) {
+  const getState = deps.getState ?? defaultGetState
+  const getHeadSha = deps.getHeadSha ?? defaultGetHeadSha
+
+  return tool({
+    description: "Dispatch a code quality review using git SHAs to scope the change.",
+    args: {
+      description: tool.schema.string().describe("What was implemented."),
+      plan_reference: tool.schema.string().optional().describe("Optional plan task reference."),
+      base_sha: tool.schema.string().optional().describe("Optional explicit base SHA."),
+      head_sha: tool.schema.string().optional().describe("Optional explicit head SHA."),
+    },
+    async execute(args, context) {
+      const descriptionError = validatePrompt(args.description)
+      if (descriptionError) {
+        return errorResult("Invalid description", "Description must be non-empty.", "EMPTY_DESCRIPTION")
+      }
+
+      const state = getState()
+      const baseSha = args.base_sha ?? state.lastBaseSha
+      if (!baseSha) {
+        return errorResult(
+          "Missing base SHA",
+          "code_review requires base_sha or a previously recorded lastBaseSha.",
+          "MISSING_BASE_SHA"
+        )
+      }
+
+      const headSha = args.head_sha ?? await getHeadSha(context.directory)
+      const prompt = fillTemplate(CODE_QUALITY_REVIEWER_TEMPLATE, {
+        WHAT_WAS_IMPLEMENTED: args.description.trim(),
+        PLAN_OR_REQUIREMENTS: args.plan_reference?.trim() ?? "not specified",
+        BASE_SHA: baseSha,
+        HEAD_SHA: headSha,
+        DESCRIPTION: args.description.trim(),
+      })
+
+      return dispatchSubtask(
+        client,
+        context.sessionID,
+        context.agent,
+        "workflow-reviewer",
+        prompt,
+        `Code review: ${args.description.trim().slice(0, 80)}`,
         context.metadata
       )
     },

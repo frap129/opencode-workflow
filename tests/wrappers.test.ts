@@ -10,6 +10,8 @@ import {
   createReviewSpecTool,
   createReviewPlanTool,
   createInvestigateTool,
+  createVerifySpecComplianceTool,
+  createCodeReviewTool,
 } from "../src/tools/wrappers"
 import { cacheVariant } from "../src/session"
 
@@ -234,9 +236,9 @@ describe("research", () => {
 describe("programmer", () => {
   test("dispatches subtask to workflow-programmer with correct prompt", async () => {
     const { client, calls } = createMockClient()
-    const tool = createProgrammerTool(client)
+    const tool = createProgrammerTool(client, { getHeadSha: mock(async () => "abc") })
     const result = await tool.execute(
-      { prompt: "Implement the user registration endpoint" },
+      { task_name: "User registration", prompt: "Implement the user registration endpoint" },
       mockContext(testDir)
     )
 
@@ -249,8 +251,8 @@ describe("programmer", () => {
 
   test("rejects empty prompt", async () => {
     const { client, calls } = createMockClient()
-    const tool = createProgrammerTool(client)
-    const result = await tool.execute({ prompt: "" }, mockContext(testDir))
+    const tool = createProgrammerTool(client, { getHeadSha: mock(async () => "abc") })
+    const result = await tool.execute({ task_name: "Test", prompt: "" }, mockContext(testDir))
     assertErrorResult(JSON.parse(result), "EMPTY_PROMPT")
     expect(calls).toHaveLength(0)
   })
@@ -261,9 +263,9 @@ describe("programmer", () => {
         prompt: mock(async () => { throw new Error("server error") }),
       },
     }
-    const tool = createProgrammerTool(client)
+    const tool = createProgrammerTool(client, { getHeadSha: mock(async () => "abc") })
     const result = await tool.execute(
-      { prompt: "Build something" },
+      { task_name: "Test", prompt: "Build something" },
       mockContext(testDir)
     )
     assertErrorResult(JSON.parse(result), "DISPATCH_FAILED")
@@ -539,4 +541,100 @@ test("investigate prepends investigate framing and uses workflow-explore", async
   expect(payload.body.parts[0].prompt).toContain("Investigate and debug")
   expect(payload.body.parts[0].prompt).toContain("why is bootstrap failing?")
   expect(payload.body.parts[0].agent).toBe("workflow-explore")
+})
+
+test("programmer fills template and records lastBaseSha before dispatch", async () => {
+  const { client } = createMockClient()
+  const getHeadSha = mock(async () => "1234567890abcdef1234567890abcdef12345678")
+  const updateState = mock(() => {})
+  const toolDef = createProgrammerTool(client, { getHeadSha, updateState })
+
+  await toolDef.execute(
+    {
+      task_name: "Add prompt constants",
+      prompt: "### Task 1\nImplement prompt constants",
+      context: "This is the first task in Chunk 1",
+    },
+    mockContext(testDir)
+  )
+
+  expect(updateState).toHaveBeenCalledWith({
+    lastBaseSha: "1234567890abcdef1234567890abcdef12345678",
+  })
+
+  const dispatched = client.session.prompt.mock.calls[0][0].body.parts[0].prompt
+  expect(dispatched).toContain("Implement prompt constants")
+  expect(dispatched).toContain("This is the first task in Chunk 1")
+  expect(dispatched).toContain(testDir)
+})
+
+test("programmer rejects empty task_name", async () => {
+  const { client } = createMockClient()
+  const getHeadSha = mock(async () => "abc123")
+  const toolDef = createProgrammerTool(client, { getHeadSha })
+  const raw = await toolDef.execute(
+    { task_name: "", prompt: "do something" },
+    mockContext(testDir)
+  )
+  assertErrorResult(JSON.parse(raw), "EMPTY_TASK_NAME")
+})
+
+test("verify_spec_compliance fills requirements and report placeholders", async () => {
+  const { client } = createMockClient()
+  const toolDef = createVerifySpecComplianceTool(client)
+  await toolDef.execute(
+    { requirements: "Must add bash tool", report: "Added bash tool and tests" },
+    mockContext(testDir)
+  )
+
+  const dispatched = client.session.prompt.mock.calls[0][0].body.parts[0].prompt
+  expect(dispatched).toContain("Must add bash tool")
+  expect(dispatched).toContain("Added bash tool and tests")
+})
+
+test("verify_spec_compliance rejects empty requirements", async () => {
+  const { client } = createMockClient()
+  const toolDef = createVerifySpecComplianceTool(client)
+  const raw = await toolDef.execute(
+    { requirements: "", report: "some report" },
+    mockContext(testDir)
+  )
+  assertErrorResult(JSON.parse(raw), "EMPTY_REQUIREMENTS")
+})
+
+test("verify_spec_compliance rejects empty report", async () => {
+  const { client } = createMockClient()
+  const toolDef = createVerifySpecComplianceTool(client)
+  const raw = await toolDef.execute(
+    { requirements: "some requirements", report: "" },
+    mockContext(testDir)
+  )
+  assertErrorResult(JSON.parse(raw), "EMPTY_REPORT")
+})
+
+test("code_review falls back to state lastBaseSha and current HEAD", async () => {
+  const { client } = createMockClient()
+  const getState = mock(() => ({ phase: "implement", lastBaseSha: "base-sha" }))
+  const getHeadSha = mock(async () => "head-sha")
+  const toolDef = createCodeReviewTool(client, { getState, getHeadSha })
+
+  await toolDef.execute({ description: "Implemented tool registration" }, mockContext(testDir))
+
+  const dispatched = client.session.prompt.mock.calls[0][0].body.parts[0].prompt
+  expect(dispatched).toContain("base-sha")
+  expect(dispatched).toContain("head-sha")
+  expect(dispatched).toContain("Implemented tool registration")
+})
+
+test("code_review errors when no explicit or stored base SHA is available", async () => {
+  const { client } = createMockClient()
+  const getState = mock(() => ({ phase: "implement", lastBaseSha: null }))
+  const getHeadSha = mock(async () => "head-sha")
+  const toolDef = createCodeReviewTool(client, { getState, getHeadSha })
+
+  const raw = await toolDef.execute({ description: "Implemented tool registration" }, mockContext(testDir))
+  const result = JSON.parse(raw)
+
+  expect(result.metadata.queued).toBe(false)
+  expect(result.metadata.errorCode).toBe("MISSING_BASE_SHA")
 })
