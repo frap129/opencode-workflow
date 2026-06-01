@@ -12,6 +12,12 @@ import {
 } from "./bootstrap"
 import type { AgentName } from "./constants"
 import { getCachedVariant } from "./session"
+import {
+  BRAINSTORM_PHASE_PROMPT,
+  PLAN_PHASE_PROMPT,
+  IMPLEMENT_PHASE_PROMPT,
+} from "./prompts"
+import { updateState as defaultUpdateState } from "./state"
 
 
 /**
@@ -21,32 +27,35 @@ import { getCachedVariant } from "./session"
 const ENTRY_PROMPTS: Record<PhaseName, (args: string) => string> = {
   brainstorm: (args) =>
     [
-      "You are now in brainstorm mode.",
-      "Your role is to explore ideas, ask clarifying questions, and help refine requirements into a spec.",
-      "Use the explore and research tools to gather context. Use write_spec to save your findings.",
-      "Use review_spec to get structured feedback on specs before finalizing.",
+      BRAINSTORM_PHASE_PROMPT,
       "",
-      args ? `The user wants to brainstorm: ${args}` : "Ask the user what they'd like to brainstorm.",
+      "---",
+      "",
+      args
+        ? `The user wants to brainstorm: ${args}`
+        : "Ask the user what they'd like to brainstorm.",
     ].join("\n"),
 
   plan: (args) =>
     [
-      "You are now in plan mode.",
-      "Your role is to turn an approved spec into an actionable implementation plan.",
-      "Use read_spec to load the relevant spec. Use write_plan to create the plan.",
-      "Use review_plan to get structured feedback on plans before finalizing.",
+      PLAN_PHASE_PROMPT,
       "",
-      args ? `The user wants to plan: ${args}` : "Ask the user which spec to plan for.",
+      "---",
+      "",
+      args
+        ? `The user wants to plan: ${args}`
+        : "Ask the user which spec to create a plan for.",
     ].join("\n"),
 
   implement: (args) =>
     [
-      "You are now in implement mode.",
-      "Your role is to execute against an existing approved plan.",
-      "Use read_plan to load the plan. Use the programmer tool for focused implementation work.",
-      "Use explore and research for additional context as needed.",
+      IMPLEMENT_PHASE_PROMPT,
       "",
-      args ? `The user wants to implement: ${args}` : "Ask the user which plan to implement.",
+      "---",
+      "",
+      args
+        ? `The user wants to implement: ${args}`
+        : "Ask the user which plan to implement.",
     ].join("\n"),
 }
 
@@ -90,7 +99,8 @@ export function createCommandHook(
   projectDir: string,
   checkBootstrapFn: (dir: string) => Promise<BootstrapStatus> = defaultCheckBootstrap,
   runBootstrapFn: (dir: string) => Promise<void> = defaultRunBootstrap,
-  forceBootstrapFn: (dir: string) => Promise<void> = defaultForceBootstrap
+  forceBootstrapFn: (dir: string) => Promise<void> = defaultForceBootstrap,
+  updateStateFn: typeof defaultUpdateState = defaultUpdateState
 ) {
   const phaseNames = new Set(Object.keys(PHASE_AGENT_MAP))
 
@@ -132,6 +142,8 @@ export function createCommandHook(
     // Build entry prompt
     const args = (input.arguments || "").trim()
     const entryPrompt = ENTRY_PROMPTS[phase](args)
+
+    updateStateFn({ phase })
 
     // Use the cached variant (captured by chat.message hook BEFORE
     // opencode's agent switch reset it) so the variant is preserved.

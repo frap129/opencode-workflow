@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach } from "bun:test"
+import { describe, expect, test, beforeEach, mock } from "bun:test"
 import { createConfigHook, createCommandHook } from "../src/commands"
 import { AGENT_NAMES } from "../src/constants"
 import { cacheVariant } from "../src/session"
@@ -359,5 +359,126 @@ describe("createCommandHook", () => {
 
     expect(client.calls).toHaveLength(1)
     expect(client.calls[0].body.variant).toBeUndefined()
+  })
+
+  test("brainstorm command injects the brainstorming skill text and user args", async () => {
+    const client = mockClient()
+    const updateState = mock(() => {})
+    const hook = createCommandHook(
+      client,
+      "/test/project",
+      mockBootstrapCheck("ready"),
+      async () => {},
+      async () => {},
+      updateState
+    )
+
+    await invokeWorkflowCommand(hook, {
+      command: "brainstorm", sessionID: "sess-1", arguments: "prompt injection for workflow plugin",
+    })
+
+    const promptText = client.calls[0].body.parts[0].text
+    expect(promptText).toContain("# Brainstorming Ideas Into Designs")
+    expect(promptText).toContain("HARD-GATE")
+    expect(promptText).toContain("The user wants to brainstorm: prompt injection for workflow plugin")
+    expect(updateState).toHaveBeenCalledWith({ phase: "brainstorm" })
+  })
+
+  test("plan command injects the writing-plans skill text and user args", async () => {
+    const client = mockClient()
+    const updateState = mock(() => {})
+    const hook = createCommandHook(
+      client,
+      "/test/project",
+      mockBootstrapCheck("ready"),
+      async () => {},
+      async () => {},
+      updateState
+    )
+
+    await invokeWorkflowCommand(hook, {
+      command: "plan", sessionID: "sess-1", arguments: "prompt-injection-spec.md",
+    })
+
+    const promptText = client.calls[0].body.parts[0].text
+    expect(promptText).toContain("# Writing Plans")
+    expect(promptText).toContain("subagent-driven-development")
+    expect(promptText).toContain("The user wants to plan: prompt-injection-spec.md")
+    expect(updateState).toHaveBeenCalledWith({ phase: "plan" })
+  })
+
+  test("implement command injects the subagent-driven-development skill text and user args", async () => {
+    const client = mockClient()
+    const updateState = mock(() => {})
+    const hook = createCommandHook(
+      client,
+      "/test/project",
+      mockBootstrapCheck("ready"),
+      async () => {},
+      async () => {},
+      updateState
+    )
+
+    await invokeWorkflowCommand(hook, {
+      command: "implement", sessionID: "sess-1", arguments: "prompt-injection-plan.md",
+    })
+
+    const promptText = client.calls[0].body.parts[0].text
+    expect(promptText).toContain("# Subagent-Driven Development")
+    expect(promptText).toContain("spec compliance")
+    expect(promptText).toContain("code quality")
+    expect(promptText).toContain("The user wants to implement: prompt-injection-plan.md")
+    expect(updateState).toHaveBeenCalledWith({ phase: "implement" })
+  })
+
+  test("empty brainstorm args still inject skill text and brainstorm fallback question", async () => {
+    const client = mockClient()
+    const hook = createCommandHook(
+      client,
+      "/test/project",
+      mockBootstrapCheck("ready")
+    )
+
+    await invokeWorkflowCommand(hook, {
+      command: "brainstorm", sessionID: "sess-1", arguments: "",
+    })
+
+    const promptText = client.calls[0].body.parts[0].text
+    expect(promptText).toContain("# Brainstorming Ideas Into Designs")
+    expect(promptText).toContain("Ask the user what they'd like to brainstorm.")
+  })
+
+  test("empty plan args still inject skill text and plan fallback question", async () => {
+    const client = mockClient()
+    const hook = createCommandHook(
+      client,
+      "/test/project",
+      mockBootstrapCheck("ready")
+    )
+
+    await invokeWorkflowCommand(hook, {
+      command: "plan", sessionID: "sess-1", arguments: "",
+    })
+
+    const promptText = client.calls[0].body.parts[0].text
+    expect(promptText).toContain("# Writing Plans")
+    expect(promptText).toContain("Ask the user which spec to create a plan for.")
+  })
+
+  test("empty implement args still inject skill text and implement fallback question", async () => {
+    const client = mockClient()
+    const hook = createCommandHook(
+      client,
+      "/test/project",
+      mockBootstrapCheck("ready")
+    )
+
+    await invokeWorkflowCommand(hook, {
+      command: "implement", sessionID: "sess-1", arguments: "",
+    })
+
+    const promptText = client.calls[0].body.parts[0].text
+    expect(promptText).toContain("# Subagent-Driven Development")
+    expect(promptText).toContain("Ask the user which plan to implement.")
   })
 })
