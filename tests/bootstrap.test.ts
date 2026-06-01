@@ -369,4 +369,88 @@ describe("getAgentContent", () => {
     expect(content).toContain("read_plan");
     expect(content).toMatch(/do not.*(?:edit|create|write)/i);
   });
+
+  function expectPermissionLines(content: string, expected: string[]) {
+    for (const line of expected) {
+      expect(content).toContain(line)
+    }
+  }
+
+  test("workflow-brainstorm frontmatter matches brainstorm phase tool matrix", () => {
+    const content = getAgentContent("workflow-brainstorm")
+    expectPermissionLines(content, [
+      "explore: allow",
+      "research: allow",
+      "read_spec: allow",
+      "write_spec: allow",
+      "edit_spec: allow",
+      "review_spec: allow",
+      "programmer: deny",
+      "review_plan: deny",
+      "read_plan: deny",
+      "write_plan: deny",
+      "edit_plan: deny",
+      "verify_spec_compliance: deny",
+      "code_review: deny",
+      "investigate: deny",
+      "bash: deny",
+    ])
+  })
+
+  test("workflow-plan frontmatter matches plan phase tool matrix", () => {
+    const content = getAgentContent("workflow-plan")
+    expectPermissionLines(content, [
+      "explore: allow",
+      "research: allow",
+      "read_spec: allow",
+      "read_plan: allow",
+      "write_plan: allow",
+      "edit_plan: allow",
+      "review_plan: allow",
+      "programmer: deny",
+      "write_spec: deny",
+      "edit_spec: deny",
+      "review_spec: deny",
+      "verify_spec_compliance: deny",
+      "code_review: deny",
+      "investigate: deny",
+      "bash: deny",
+    ])
+  })
+
+  test("workflow-implement frontmatter matches implement phase tool matrix", () => {
+    const content = getAgentContent("workflow-implement")
+    expectPermissionLines(content, [
+      "explore: allow",
+      "research: allow",
+      "programmer: allow",
+      "read_plan: allow",
+      "review_plan: allow",
+      "read_spec: allow",
+      "review_spec: allow",
+      "verify_spec_compliance: allow",
+      "code_review: allow",
+      "investigate: allow",
+      "bash: allow",
+      "write_spec: deny",
+      "edit_spec: deny",
+      "write_plan: deny",
+      "edit_plan: deny",
+    ])
+  })
+
+  test("primary agent guidance mentions the newly available workflow tools", () => {
+    const brainstorm = getAgentContent("workflow-brainstorm")
+    const plan = getAgentContent("workflow-plan")
+    const implement = getAgentContent("workflow-implement")
+
+    expect(brainstorm).toContain("edit_spec")
+    expect(plan).toContain("edit_plan")
+    expect(implement).toContain("verify_spec_compliance")
+    expect(implement).toContain("code_review")
+    expect(implement).toContain("investigate")
+    expect(implement).toContain("bash")
+    expect(implement).toContain("review_spec")
+    expect(implement).toContain("read_spec")
+  })
 });

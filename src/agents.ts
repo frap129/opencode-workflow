@@ -19,10 +19,20 @@ permission:
   lsp: deny
   webfetch: deny
   websearch: deny
+  explore: allow
+  research: allow
+  read_spec: allow
+  write_spec: allow
+  edit_spec: allow
+  review_spec: allow
   programmer: deny
+  review_plan: deny
   read_plan: deny
   write_plan: deny
-  review_plan: deny
+  edit_plan: deny
+  verify_spec_compliance: deny
+  code_review: deny
+  investigate: deny
   mcp_*: deny
 ---
 
@@ -35,7 +45,7 @@ You are a brainstorming specialist. Your role is to explore ideas, ask clarifyin
 1. **Understand** — Ask the user clarifying questions about their goals, constraints, and priorities
 2. **Explore** — Use the \`explore\` tool to inspect the codebase for relevant patterns, existing code, and architecture
 3. **Research** — Use the \`research\` tool to gather broader technical context when needed
-4. **Draft** — Use \`write_spec\` to create or update spec documents in \`.opencode/plans/\`
+4. **Draft** — Use \`write_spec\` to create or update spec documents in \`.opencode/plans/\`; use \`edit_spec\` to make targeted changes to existing specs
 5. **Review** — Use \`review_spec\` to get structured feedback on your spec before finalizing
 6. **Iterate** — Refine the spec based on review feedback until it is approved
 
@@ -45,6 +55,7 @@ You are a brainstorming specialist. Your role is to explore ideas, ask clarifyin
 - Use \`research\` to gather broader technical context and documentation
 - Use \`read_spec\` to load existing spec files
 - Use \`write_spec\` to save spec drafts to \`.opencode/plans/\`
+- Use \`edit_spec\` to make targeted search-and-replace edits to existing specs
 - Use \`review_spec\` to request structured review of a spec
 
 ## Constraints
@@ -69,9 +80,20 @@ permission:
   lsp: deny
   webfetch: deny
   websearch: deny
+  explore: allow
+  research: allow
+  read_spec: allow
+  read_plan: allow
+  write_plan: allow
+  edit_plan: allow
+  review_plan: allow
   programmer: deny
   write_spec: deny
+  edit_spec: deny
   review_spec: deny
+  verify_spec_compliance: deny
+  code_review: deny
+  investigate: deny
   mcp_*: deny
 ---
 
@@ -104,6 +126,7 @@ Plans should include:
 - Use \`research\` to gather additional context
 - Use \`read_plan\` to load existing plan drafts
 - Use \`write_plan\` to save plan documents to \`.opencode/plans/\`
+- Use \`edit_plan\` to make targeted search-and-replace edits to existing plans
 - Use \`review_plan\` to request structured review of a plan
 
 ## Constraints
@@ -122,13 +145,25 @@ permission:
   edit: deny
   glob: deny
   grep: deny
-  bash: deny
   task: deny
   lsp: deny
   webfetch: deny
   websearch: deny
+  explore: allow
+  research: allow
+  programmer: allow
+  read_plan: allow
+  review_plan: allow
+  read_spec: allow
+  review_spec: allow
+  verify_spec_compliance: allow
+  code_review: allow
+  investigate: allow
+  bash: allow
   write_spec: deny
+  edit_spec: deny
   write_plan: deny
+  edit_plan: deny
   mcp_*: deny
 ---
 
@@ -152,6 +187,12 @@ You are an implementation specialist. Your role is to execute against an approve
 - Use \`explore\` to gather codebase context
 - Use \`research\` for technical references
 - Use \`review_plan\` to verify progress against the plan
+- Use \`read_spec\` to reference the original spec
+- Use \`review_spec\` to verify spec compliance of completed work
+- Use \`verify_spec_compliance\` to check implementation against spec requirements
+- Use \`code_review\` to get code quality review of changes
+- Use \`investigate\` to debug issues in the codebase
+- Use \`bash\` to run shell commands for builds, tests, and verification
 
 ## Constraints
 
