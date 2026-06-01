@@ -104,7 +104,7 @@ export function createWriteSpecTool() {
 
       return result({
         title: `Wrote ${args.filename}`,
-        output: `Successfully wrote ${args.filename} to ${PLANS_DIR}/`,
+        output: `Successfully wrote ${args.filename} to ${PLANS_DIR}/. Spec written. Call 'review_spec' to review it.`,
         metadata: { success: true, filename: args.filename, bytes: args.content.length },
       })
     },
@@ -174,9 +174,145 @@ export function createWritePlanTool() {
 
       return result({
         title: `Wrote ${args.filename}`,
-        output: `Successfully wrote ${args.filename} to ${PLANS_DIR}/`,
+        output: `Successfully wrote ${args.filename} to ${PLANS_DIR}/. Plan written. Call 'review_plan' to review it.`,
         metadata: { success: true, filename: args.filename, bytes: args.content.length },
       })
+    },
+  })
+}
+
+async function editArtifact(params: {
+  directory: string
+  filename: string
+  filenameRegex: RegExp
+  kind: string
+  oldText: string
+  newText: string
+  reviewNudge: string
+}): Promise<string> {
+  const { directory, filename, filenameRegex, kind, oldText, newText, reviewNudge } = params
+
+  const validationError = validateFilename(filename, filenameRegex, kind)
+  if (validationError) return validationError
+
+  if (oldText.length === 0) {
+    return errorResult(
+      `Cannot edit ${filename}`,
+      `old_text must not be empty.`,
+      "EMPTY_OLD_TEXT"
+    )
+  }
+
+  const filePath = resolvePlanPath(directory, filename)
+  const content = await readFile(filePath, "utf-8")
+
+  let count = 0
+  let idx = content.indexOf(oldText)
+  while (idx !== -1) {
+    count++
+    idx = content.indexOf(oldText, idx + oldText.length)
+  }
+
+  if (count === 0) {
+    return errorResult(
+      `Text not found in ${filename}`,
+      `The specified old_text was not found in "${filename}".`,
+      "TEXT_NOT_FOUND"
+    )
+  }
+
+  if (count > 1) {
+    return errorResult(
+      `Ambiguous match in ${filename}`,
+      `old_text matched ${count} locations in "${filename}". Provide more context to make it unique.`,
+      "AMBIGUOUS_MATCH"
+    )
+  }
+
+  const updated = content.replace(oldText, newText)
+  await writeFile(filePath, updated, "utf-8")
+
+  return result({
+    title: `Edited ${filename}`,
+    output: `Successfully edited "${filename}". ${reviewNudge}`,
+    metadata: { success: true, filename, bytes: updated.length },
+  })
+}
+
+export function createEditSpecTool() {
+  return tool({
+    description:
+      "Edit a spec artifact file in .opencode/plans/ using exact search-and-replace. " +
+      "Filename must be a simple basename matching the pattern: " +
+      "[a-z0-9][a-z0-9._-]*-spec.md",
+    args: {
+      filename: tool.schema.string().describe(
+        "Spec filename (e.g. 'my-feature-spec.md'). Must end with -spec.md."
+      ),
+      old_text: tool.schema.string().describe("Exact text to find (must match exactly once)."),
+      new_text: tool.schema.string().describe("Replacement text (may be empty to delete)."),
+    },
+    async execute(args, context) {
+      context.metadata({ title: `Editing ${args.filename}` })
+      try {
+        return await editArtifact({
+          directory: context.directory,
+          filename: args.filename,
+          filenameRegex: SPEC_FILENAME_REGEX,
+          kind: "spec",
+          oldText: args.old_text,
+          newText: args.new_text,
+          reviewNudge: "Call 'review_spec' to review the changes.",
+        })
+      } catch (err: any) {
+        if (err.code === "ENOENT") {
+          return errorResult(
+            `File not found: ${args.filename}`,
+            `Spec file "${args.filename}" does not exist in ${PLANS_DIR}/`,
+            "FILE_NOT_FOUND"
+          )
+        }
+        throw err
+      }
+    },
+  })
+}
+
+export function createEditPlanTool() {
+  return tool({
+    description:
+      "Edit a plan artifact file in .opencode/plans/ using exact search-and-replace. " +
+      "Filename must be a simple basename matching the pattern: " +
+      "[a-z0-9][a-z0-9._-]*-plan.md",
+    args: {
+      filename: tool.schema.string().describe(
+        "Plan filename (e.g. 'my-feature-plan.md'). Must end with -plan.md."
+      ),
+      old_text: tool.schema.string().describe("Exact text to find (must match exactly once)."),
+      new_text: tool.schema.string().describe("Replacement text (may be empty to delete)."),
+    },
+    async execute(args, context) {
+      context.metadata({ title: `Editing ${args.filename}` })
+      try {
+        return await editArtifact({
+          directory: context.directory,
+          filename: args.filename,
+          filenameRegex: PLAN_FILENAME_REGEX,
+          kind: "plan",
+          oldText: args.old_text,
+          newText: args.new_text,
+          reviewNudge: "Call 'review_plan' to review the changes.",
+        })
+      } catch (err: any) {
+        if (err.code === "ENOENT") {
+          return errorResult(
+            `File not found: ${args.filename}`,
+            `Plan file "${args.filename}" does not exist in ${PLANS_DIR}/`,
+            "FILE_NOT_FOUND"
+          )
+        }
+        throw err
+      }
     },
   })
 }

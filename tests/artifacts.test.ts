@@ -8,6 +8,8 @@ import {
   createWriteSpecTool,
   createReadPlanTool,
   createWritePlanTool,
+  createEditSpecTool,
+  createEditPlanTool,
 } from "../src/tools/artifacts"
 import { PLANS_DIR } from "../src/constants"
 
@@ -328,5 +330,92 @@ describe("plans directory handling", () => {
 
     const content = await readFile(join(plansDir, "new-plan.md"), "utf-8")
     expect(content).toBe("content")
+  })
+})
+
+// ── review nudges ───────────────────────────────────────────────────
+
+describe("review nudges", () => {
+  test("write_spec includes review nudge", async () => {
+    const tool = createWriteSpecTool()
+    const result = await tool.execute(
+      { filename: "nudge-spec.md", content: "content" },
+      mockContext(testDir)
+    )
+    const parsed = JSON.parse(result)
+    expect(parsed.metadata.success).toBe(true)
+    expect(parsed.output).toContain("Call 'review_spec' to review it.")
+  })
+
+  test("write_plan includes review nudge", async () => {
+    const tool = createWritePlanTool()
+    const result = await tool.execute(
+      { filename: "nudge-plan.md", content: "content" },
+      mockContext(testDir)
+    )
+    const parsed = JSON.parse(result)
+    expect(parsed.metadata.success).toBe(true)
+    expect(parsed.output).toContain("Call 'review_plan' to review it.")
+  })
+})
+
+// ── edit_spec ───────────────────────────────────────────────────────
+
+describe("edit_spec", () => {
+  test("replaces exactly one matching block and includes nudge", async () => {
+    await writeFile(join(plansDir, "my-feature-spec.md"), "# Title\n\nOld section.\n\nFin.")
+    const tool = createEditSpecTool()
+    const result = await tool.execute(
+      { filename: "my-feature-spec.md", old_text: "Old section.", new_text: "New section." },
+      mockContext(testDir)
+    )
+    const parsed = JSON.parse(result)
+    expect(parsed.metadata.success).toBe(true)
+    expect(parsed.output).toContain("Call 'review_spec' to review the changes.")
+
+    const content = await readFile(join(plansDir, "my-feature-spec.md"), "utf-8")
+    expect(content).toBe("# Title\n\nNew section.\n\nFin.")
+  })
+
+  test("errors when old_text matches multiple locations", async () => {
+    await writeFile(join(plansDir, "dup-spec.md"), "repeat repeat")
+    const tool = createEditSpecTool()
+    const result = await tool.execute(
+      { filename: "dup-spec.md", old_text: "repeat", new_text: "once" },
+      mockContext(testDir)
+    )
+    const parsed = JSON.parse(result)
+    expect(parsed.metadata.success).toBe(false)
+    expect(parsed.metadata.errorCode).toBe("AMBIGUOUS_MATCH")
+  })
+})
+
+// ── edit_plan ───────────────────────────────────────────────────────
+
+describe("edit_plan", () => {
+  test("errors when old_text is missing (TEXT_NOT_FOUND)", async () => {
+    await writeFile(join(plansDir, "my-feature-plan.md"), "# Plan\n\nSome content.")
+    const tool = createEditPlanTool()
+    const result = await tool.execute(
+      { filename: "my-feature-plan.md", old_text: "nonexistent text", new_text: "replacement" },
+      mockContext(testDir)
+    )
+    const parsed = JSON.parse(result)
+    expect(parsed.metadata.success).toBe(false)
+    expect(parsed.metadata.errorCode).toBe("TEXT_NOT_FOUND")
+  })
+
+  test("allows empty new_text for deletion", async () => {
+    await writeFile(join(plansDir, "delete-plan.md"), "Keep this. Remove this.")
+    const tool = createEditPlanTool()
+    const result = await tool.execute(
+      { filename: "delete-plan.md", old_text: " Remove this.", new_text: "" },
+      mockContext(testDir)
+    )
+    const parsed = JSON.parse(result)
+    expect(parsed.metadata.success).toBe(true)
+
+    const content = await readFile(join(plansDir, "delete-plan.md"), "utf-8")
+    expect(content).toBe("Keep this.")
   })
 })
