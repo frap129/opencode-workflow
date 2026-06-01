@@ -1,6 +1,6 @@
 // tests/wrappers.test.ts
 import { describe, expect, test, beforeEach, afterEach, mock } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import {
@@ -9,6 +9,7 @@ import {
   createProgrammerTool,
   createReviewSpecTool,
   createReviewPlanTool,
+  createInvestigateTool,
 } from "../src/tools/wrappers"
 import { cacheVariant } from "../src/session"
 
@@ -351,6 +352,9 @@ describe("review_spec", () => {
 
 describe("review_plan", () => {
   test("dispatches subtask to workflow-reviewer for plan review", async () => {
+    await mkdir(join(testDir, ".opencode/plans"), { recursive: true })
+    await writeFile(join(testDir, ".opencode/plans", "my-feature-plan.md"), "# My Feature Plan\n\n## Chunk 1: Foundation\n\nSome content\n")
+
     const { client, calls } = createMockClient()
     const tool = createReviewPlanTool(client)
     const result = await tool.execute(
@@ -367,6 +371,9 @@ describe("review_plan", () => {
   })
 
   test("includes optional prompt in subtask", async () => {
+    await mkdir(join(testDir, ".opencode/plans"), { recursive: true })
+    await writeFile(join(testDir, ".opencode/plans", "my-feature-plan.md"), "# My Feature Plan\n\n## Chunk 1: Foundation\n\nSome content\n")
+
     const { client, calls } = createMockClient()
     const tool = createReviewPlanTool(client)
     await tool.execute(
@@ -411,6 +418,9 @@ describe("review_plan", () => {
   })
 
   test("returns error when dispatch fails", async () => {
+    await mkdir(join(testDir, ".opencode/plans"), { recursive: true })
+    await writeFile(join(testDir, ".opencode/plans", "my-feature-plan.md"), "# My Feature Plan\n\n## Chunk 1: Foundation\n\nSome content\n")
+
     const client = {
       session: {
         prompt: mock(async () => { throw new Error("dispatch error") }),
@@ -423,4 +433,110 @@ describe("review_plan", () => {
     )
     assertErrorResult(JSON.parse(result), "DISPATCH_FAILED")
   })
+})
+
+// ── template adoption and new tools ─────────────────────────────────
+
+test("explore prepends EXPLORE_TEMPLATE to the dispatched prompt", async () => {
+  const { client } = createMockClient()
+  const toolDef = createExploreTool(client)
+  await toolDef.execute({ prompt: "find bootstrap logic" }, mockContext(testDir))
+
+  const payload = client.session.prompt.mock.calls[0][0]
+  expect(payload.body.parts[0].prompt).toContain("Explore the codebase")
+  expect(payload.body.parts[0].prompt).toContain("find bootstrap logic")
+  expect(payload.body.parts[0].agent).toBe("workflow-explore")
+})
+
+test("research prepends RESEARCH_TEMPLATE to the dispatched prompt", async () => {
+  const { client } = createMockClient()
+  const toolDef = createResearchTool(client)
+  await toolDef.execute({ prompt: "find opencode permission docs" }, mockContext(testDir))
+
+  const payload = client.session.prompt.mock.calls[0][0]
+  expect(payload.body.parts[0].prompt).toContain("Research the topic")
+  expect(payload.body.parts[0].prompt).toContain("find opencode permission docs")
+  expect(payload.body.parts[0].agent).toBe("workflow-research")
+})
+
+test("review_spec fills the spec document reviewer template", async () => {
+  const { client } = createMockClient()
+  const toolDef = createReviewSpecTool(client)
+  await toolDef.execute({ filename: "feature-spec.md" }, mockContext(testDir))
+
+  const dispatched = client.session.prompt.mock.calls[0][0].body.parts[0].prompt
+  expect(dispatched).toContain("feature-spec.md")
+  expect(dispatched).toContain("Completeness")
+})
+
+test("review_plan extracts and sends only the requested chunk", async () => {
+  await mkdir(join(testDir, ".opencode/plans"), { recursive: true })
+  await writeFile(
+    join(testDir, ".opencode/plans", "feature-plan.md"),
+    [
+      "# Plan",
+      "",
+      "## Chunk 1: Foundation",
+      "A",
+      "",
+      "## Chunk 2: Tools",
+      "B",
+      "",
+      "## Chunk 3: Integration",
+      "C",
+    ].join("\n")
+  )
+
+  const { client } = createMockClient()
+  const toolDef = createReviewPlanTool(client)
+  await toolDef.execute(
+    { filename: "feature-plan.md", spec_filename: "feature-spec.md", chunk: 2 },
+    mockContext(testDir)
+  )
+
+  const dispatched = client.session.prompt.mock.calls[0][0].body.parts[0].prompt
+  expect(dispatched).toContain("feature-plan.md")
+  expect(dispatched).toContain("feature-spec.md")
+  expect(dispatched).toContain("## Chunk 2: Tools")
+  expect(dispatched).not.toContain("## Chunk 1: Foundation")
+  expect(dispatched).not.toContain("## Chunk 3: Integration")
+})
+
+test("review_plan returns CHUNK_NOT_FOUND when the requested chunk header is missing", async () => {
+  await mkdir(join(testDir, ".opencode/plans"), { recursive: true })
+  await writeFile(join(testDir, ".opencode/plans", "feature-plan.md"), "# Plan\n")
+
+  const { client } = createMockClient()
+  const toolDef = createReviewPlanTool(client)
+  const raw = await toolDef.execute(
+    { filename: "feature-plan.md", chunk: 2 },
+    mockContext(testDir)
+  )
+  const result = JSON.parse(raw)
+
+  expect(result.metadata.queued).toBe(false)
+  expect(result.metadata.errorCode).toBe("CHUNK_NOT_FOUND")
+  expect(result.output).toContain("Chunk 2")
+})
+
+test("review_plan rejects non-positive chunk number", async () => {
+  const { client } = createMockClient()
+  const toolDef = createReviewPlanTool(client)
+  const result = await toolDef.execute(
+    { filename: "my-feature-plan.md", chunk: 0 },
+    mockContext(testDir)
+  )
+  assertErrorResult(JSON.parse(result), "INVALID_CHUNK")
+  expect(client.session.prompt.mock.calls).toHaveLength(0)
+})
+
+test("investigate prepends investigate framing and uses workflow-explore", async () => {
+  const { client } = createMockClient()
+  const toolDef = createInvestigateTool(client)
+  await toolDef.execute({ prompt: "why is bootstrap failing?" }, mockContext(testDir))
+
+  const payload = client.session.prompt.mock.calls[0][0]
+  expect(payload.body.parts[0].prompt).toContain("Investigate and debug")
+  expect(payload.body.parts[0].prompt).toContain("why is bootstrap failing?")
+  expect(payload.body.parts[0].agent).toBe("workflow-explore")
 })

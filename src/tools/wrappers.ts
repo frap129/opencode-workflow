@@ -1,6 +1,16 @@
 // src/tools/wrappers.ts
+import { readFile } from "node:fs/promises"
+import { join } from "node:path"
 import { tool } from "@opencode-ai/plugin"
-import { SPEC_FILENAME_REGEX, PLAN_FILENAME_REGEX } from "../constants"
+import { PLAN_FILENAME_REGEX, PLANS_DIR, SPEC_FILENAME_REGEX } from "../constants"
+import {
+  fillTemplate,
+  EXPLORE_TEMPLATE,
+  RESEARCH_TEMPLATE,
+  INVESTIGATE_TEMPLATE,
+  SPEC_DOCUMENT_REVIEWER_TEMPLATE,
+  PLAN_DOCUMENT_REVIEWER_TEMPLATE,
+} from "../prompts"
 import { getCachedVariant } from "../session"
 
 // ── Shared helpers ──────────────────────────────────────────────────
@@ -90,6 +100,22 @@ async function dispatchSubtask(
 
 // ── Tool factories ──────────────────────────────────────────────────
 
+function extractPlanChunk(planText: string, chunkNumber: number): string | null {
+  const lines = planText.split("\n")
+  const startIndex = lines.findIndex((line) => line.startsWith(`## Chunk ${chunkNumber}:`))
+  if (startIndex === -1) return null
+
+  let endIndex = lines.length
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
+    if (/^## Chunk \d+:/.test(lines[i])) {
+      endIndex = i
+      break
+    }
+  }
+
+  return lines.slice(startIndex, endIndex).join("\n")
+}
+
 /**
  * Create the `explore` wrapper tool.
  * Dispatches focused codebase exploration to workflow-explore.
@@ -114,7 +140,7 @@ export function createExploreTool(client: any) {
         context.sessionID,
         context.agent,
         "workflow-explore",
-        args.prompt.trim(),
+        `${EXPLORE_TEMPLATE}${args.prompt.trim()}`,
         `Explore: ${args.prompt.trim().slice(0, 80)}`,
         context.metadata
       )
@@ -146,7 +172,7 @@ export function createResearchTool(client: any) {
         context.sessionID,
         context.agent,
         "workflow-research",
-        args.prompt.trim(),
+        `${RESEARCH_TEMPLATE}${args.prompt.trim()}`,
         `Research: ${args.prompt.trim().slice(0, 80)}`,
         context.metadata
       )
@@ -209,10 +235,10 @@ export function createReviewSpecTool(client: any) {
       if (filenameError) return filenameError
 
       const reviewPrompt = [
-        `Review the spec file "${args.filename}" in .opencode/plans/.`,
-        `Use the read_spec tool to read the current contents of "${args.filename}".`,
-        `Provide a structured review covering completeness, clarity, and feasibility.`,
-        args.prompt ? `\nSpecific focus: ${args.prompt}` : "",
+        fillTemplate(SPEC_DOCUMENT_REVIEWER_TEMPLATE, {
+          SPEC_FILE_PATH: args.filename,
+        }),
+        args.prompt ? `\n## Specific Focus\n\n${args.prompt.trim()}` : "",
       ].filter(Boolean).join("\n")
 
       return dispatchSubtask(
@@ -240,22 +266,60 @@ export function createReviewPlanTool(client: any) {
       "Runs as a native child session.",
     args: {
       filename: tool.schema.string().describe(
-        "Plan filename to review (e.g. 'my-feature-plan.md'). Must end with -plan.md."
+        "Plan filename to review."
+      ),
+      spec_filename: tool.schema.string().optional().describe(
+        "Optional spec filename for reference."
+      ),
+      chunk: tool.schema.number().optional().describe(
+        "Optional chunk number from ## Chunk N: headings."
       ),
       prompt: tool.schema.string().optional().describe(
-        "Optional review focus or specific questions for the reviewer."
+        "Optional review focus."
       ),
     },
     async execute(args, context) {
       const filenameError = validateFilename(args.filename, PLAN_FILENAME_REGEX, "plan")
       if (filenameError) return filenameError
 
+      if (args.chunk !== undefined && !(Number.isInteger(args.chunk) && args.chunk > 0)) {
+        return errorResult(
+          "Invalid chunk number",
+          `Chunk must be a positive integer, got: ${args.chunk}.`,
+          "INVALID_CHUNK"
+        )
+      }
+
+      let planText: string
+      try {
+        planText = await readFile(join(context.directory, PLANS_DIR, args.filename), "utf-8")
+      } catch {
+        return errorResult(
+          "Failed to read plan file",
+          `Could not read plan file "${args.filename}" from ${PLANS_DIR}.`,
+          "FILE_NOT_FOUND"
+        )
+      }
+
+      const planContent = args.chunk ? extractPlanChunk(planText, args.chunk) : planText
+      if (args.chunk && planContent === null) {
+        return errorResult(
+          "Chunk not found",
+          `Chunk ${args.chunk} was not found in "${args.filename}". ` +
+            `Check that the plan contains a "## Chunk ${args.chunk}:" heading.`,
+          "CHUNK_NOT_FOUND"
+        )
+      }
+
       const reviewPrompt = [
-        `Review the plan file "${args.filename}" in .opencode/plans/.`,
-        `Use the read_plan tool to read the current contents of "${args.filename}".`,
-        `Provide a structured review covering task granularity, completeness, and executability.`,
-        args.prompt ? `\nSpecific focus: ${args.prompt}` : "",
-      ].filter(Boolean).join("\n")
+        fillTemplate(PLAN_DOCUMENT_REVIEWER_TEMPLATE, {
+          PLAN_FILE_PATH: args.filename,
+          SPEC_FILE_PATH: args.spec_filename ?? "not specified",
+          CHUNK: args.chunk ? `Chunk ${args.chunk}` : "Full plan",
+        }),
+        `## Plan Content\n\n${planContent}`,
+        args.prompt ? `## Specific Focus\n\n${args.prompt.trim()}` : "",
+      ].filter(Boolean).join("\n\n")
 
       return dispatchSubtask(
         client,
@@ -264,6 +328,38 @@ export function createReviewPlanTool(client: any) {
         "workflow-reviewer",
         reviewPrompt,
         `Review plan: ${args.filename}`,
+        context.metadata
+      )
+    },
+  })
+}
+
+/**
+ * Create the `investigate` wrapper tool.
+ * Dispatches debugging and investigation tasks to workflow-explore.
+ */
+export function createInvestigateTool(client: any) {
+  return tool({
+    description:
+      "Dispatch an investigation or debugging task to the workflow-explore subagent. " +
+      "Use this to trace bugs, understand failures, or investigate unexpected behavior. " +
+      "Runs as a native child session.",
+    args: {
+      prompt: tool.schema.string().describe(
+        "What to investigate or debug. Describe the issue and what you want to understand."
+      ),
+    },
+    async execute(args, context) {
+      const promptError = validatePrompt(args.prompt)
+      if (promptError) return promptError
+
+      return dispatchSubtask(
+        client,
+        context.sessionID,
+        context.agent,
+        "workflow-explore",
+        `${INVESTIGATE_TEMPLATE}${args.prompt.trim()}`,
+        `Investigate: ${args.prompt.trim().slice(0, 80)}`,
         context.metadata
       )
     },
