@@ -1,7 +1,6 @@
-import { describe, expect, test, beforeEach, mock } from "bun:test"
+import { describe, expect, test, mock } from "bun:test"
 import { createConfigHook, createCommandHook } from "../src/commands"
 import { AGENT_NAMES } from "../src/constants"
-import { cacheVariant } from "../src/session"
 
 // ── Config hook tests ─────────────────────────────────────────────
 
@@ -69,11 +68,6 @@ describe("createCommandHook", () => {
     }
   }
 
-  beforeEach(() => {
-    // Clear variant cache between tests
-    cacheVariant("sess-1", undefined)
-  })
-
   /**
    * Mock checkBootstrapFn that returns a configurable status.
    */
@@ -93,10 +87,23 @@ describe("createCommandHook", () => {
   }
 
   /**
-   * Helper: invoke a command hook, catch the expected __WORKFLOW_HANDLED__ throw,
-   * and return the client calls for inspection.
+   * Helper: invoke a phase command hook and return the output for inspection.
+   * Phase commands return normally (no throw) and write to output.parts.
    */
-  async function invokeWorkflowCommand(
+  async function invokePhaseCommand(
+    hook: Function,
+    input: { command: string; sessionID: string; arguments: string }
+  ) {
+    const output = { parts: [] as any[] }
+    await hook(input, output)
+    return output
+  }
+
+  /**
+   * Helper: invoke a non-phase command hook (workflow-init), catching
+   * the expected __WORKFLOW_HANDLED__ throw.
+   */
+  async function invokeWorkflowInit(
     hook: Function,
     input: { command: string; sessionID: string; arguments: string }
   ) {
@@ -108,7 +115,7 @@ describe("createCommandHook", () => {
     }
   }
 
-  test("brainstorm command submits entry prompt with correct agent", async () => {
+  test("brainstorm command writes entry prompt to output.parts", async () => {
     const client = mockClient()
     const hook = createCommandHook(
       client,
@@ -116,21 +123,17 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "brainstorm", sessionID: "sess-1", arguments: "design a login page",
     })
 
-    expect(client.calls).toHaveLength(1)
-    const call = client.calls[0]
-    expect(call.path.id).toBe("sess-1")
-    expect(call.body.noReply).toBeUndefined()
-    expect(call.body.agent).toBe("workflow-brainstorm")
-    expect(call.body.parts).toHaveLength(1)
-    expect(call.body.parts[0].type).toBe("text")
-    expect(call.body.parts[0].text).toContain("design a login page")
+    expect(client.calls).toHaveLength(0)
+    expect(output.parts).toHaveLength(1)
+    expect(output.parts[0].type).toBe("text")
+    expect(output.parts[0].text).toContain("design a login page")
   })
 
-  test("plan command submits entry prompt with correct agent", async () => {
+  test("plan command writes entry prompt to output.parts", async () => {
     const client = mockClient()
     const hook = createCommandHook(
       client,
@@ -138,17 +141,16 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "plan", sessionID: "sess-1", arguments: "implement auth flow",
     })
 
-    expect(client.calls).toHaveLength(1)
-    const call = client.calls[0]
-    expect(call.body.agent).toBe("workflow-plan")
-    expect(call.body.parts[0].text).toContain("implement auth flow")
+    expect(client.calls).toHaveLength(0)
+    expect(output.parts).toHaveLength(1)
+    expect(output.parts[0].text).toContain("implement auth flow")
   })
 
-  test("implement command submits entry prompt with correct agent", async () => {
+  test("implement command writes entry prompt to output.parts", async () => {
     const client = mockClient()
     const hook = createCommandHook(
       client,
@@ -156,14 +158,13 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "implement", sessionID: "sess-1", arguments: "build the auth module",
     })
 
-    expect(client.calls).toHaveLength(1)
-    const call = client.calls[0]
-    expect(call.body.agent).toBe("workflow-implement")
-    expect(call.body.parts[0].text).toContain("build the auth module")
+    expect(client.calls).toHaveLength(0)
+    expect(output.parts).toHaveLength(1)
+    expect(output.parts[0].text).toContain("build the auth module")
   })
 
   test("ignores non-workflow commands (does not throw)", async () => {
@@ -199,12 +200,12 @@ describe("createCommandHook", () => {
       async (_dir: string) => { bootstrapCalled = true }
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "brainstorm", sessionID: "sess-1", arguments: "test",
     })
 
     expect(bootstrapCalled).toBe(true)
-    expect(client.calls).toHaveLength(1)
+    expect(output.parts).toHaveLength(1)
   })
 
   test("throws on partial bootstrap (does not auto-fix)", async () => {
@@ -230,12 +231,11 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "brainstorm", sessionID: "sess-1", arguments: "user request here",
     })
 
-    const promptText = client.calls[0].body.parts[0].text
-    expect(promptText).toContain("user request here")
+    expect(output.parts[0].text).toContain("user request here")
   })
 
   test("entry prompt works with empty arguments", async () => {
@@ -246,16 +246,16 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "brainstorm", sessionID: "sess-1", arguments: "",
     })
 
-    expect(client.calls).toHaveLength(1)
-    expect(client.calls[0].body.parts[0].type).toBe("text")
-    expect(client.calls[0].body.parts[0].text.length).toBeGreaterThan(0)
+    expect(output.parts).toHaveLength(1)
+    expect(output.parts[0].type).toBe("text")
+    expect(output.parts[0].text.length).toBeGreaterThan(0)
   })
 
-  test("aborts command pipeline after submitting entry prompt", async () => {
+  test("phase commands return normally (no pipeline abort) for persistent agent switch", async () => {
     const client = mockClient()
     const hook = createCommandHook(
       client,
@@ -266,8 +266,10 @@ describe("createCommandHook", () => {
     const input = { command: "brainstorm", sessionID: "sess-1", arguments: "test" }
     const output = { parts: [] as any[] }
 
-    await expect(hook(input, output)).rejects.toThrow("__WORKFLOW_HANDLED__")
-    expect(client.calls).toHaveLength(1)
+    // Should NOT throw — returns normally so opencode applies persistent switch
+    await hook(input, output)
+    expect(output.parts).toHaveLength(1)
+    expect(client.calls).toHaveLength(0)
   })
 
   test("re-running same command is a fresh invocation (no toggle state)", async () => {
@@ -278,17 +280,16 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output1 = await invokePhaseCommand(hook, {
       command: "brainstorm", sessionID: "sess-1", arguments: "first topic",
     })
 
-    await invokeWorkflowCommand(hook, {
+    const output2 = await invokePhaseCommand(hook, {
       command: "brainstorm", sessionID: "sess-1", arguments: "second topic",
     })
 
-    expect(client.calls).toHaveLength(2)
-    expect(client.calls[0].body.parts[0].text).toContain("first topic")
-    expect(client.calls[1].body.parts[0].text).toContain("second topic")
+    expect(output1.parts[0].text).toContain("first topic")
+    expect(output2.parts[0].text).toContain("second topic")
   })
 
   test("workflow-init calls forceBootstrap and posts confirmation with noReply", async () => {
@@ -302,7 +303,7 @@ describe("createCommandHook", () => {
       async () => { forceBootstrapCalled = true }
     )
 
-    await invokeWorkflowCommand(hook, {
+    await invokeWorkflowInit(hook, {
       command: "workflow-init", sessionID: "sess-1", arguments: "",
     })
 
@@ -327,40 +328,6 @@ describe("createCommandHook", () => {
     await expect(hook(input, output)).rejects.toThrow("__WORKFLOW_HANDLED__")
   })
 
-  test("preserves model variant when switching to brainstorm agent", async () => {
-    cacheVariant("sess-1", "thinking")
-    const client = mockClient()
-    const hook = createCommandHook(
-      client,
-      "/test/project",
-      mockBootstrapCheck("ready")
-    )
-
-    await invokeWorkflowCommand(hook, {
-      command: "brainstorm", sessionID: "sess-1", arguments: "test",
-    })
-
-    expect(client.calls).toHaveLength(1)
-    expect(client.calls[0].body.variant).toBe("thinking")
-    expect(client.calls[0].path.id).toBe("sess-1")
-  })
-
-  test("works without variant set (variant is undefined)", async () => {
-    const client = mockClient()
-    const hook = createCommandHook(
-      client,
-      "/test/project",
-      mockBootstrapCheck("ready")
-    )
-
-    await invokeWorkflowCommand(hook, {
-      command: "brainstorm", sessionID: "sess-1", arguments: "test",
-    })
-
-    expect(client.calls).toHaveLength(1)
-    expect(client.calls[0].body.variant).toBeUndefined()
-  })
-
   test("brainstorm command injects the brainstorming skill text and user args", async () => {
     const client = mockClient()
     const updateState = mock(() => {})
@@ -373,11 +340,11 @@ describe("createCommandHook", () => {
       updateState
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "brainstorm", sessionID: "sess-1", arguments: "prompt injection for workflow plugin",
     })
 
-    const promptText = client.calls[0].body.parts[0].text
+    const promptText = output.parts[0].text
     expect(promptText).toContain("# Brainstorming Ideas Into Designs")
     expect(promptText).toContain("HARD-GATE")
     expect(promptText).toContain("The user wants to brainstorm: prompt injection for workflow plugin")
@@ -396,11 +363,11 @@ describe("createCommandHook", () => {
       updateState
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "plan", sessionID: "sess-1", arguments: "prompt-injection-spec.md",
     })
 
-    const promptText = client.calls[0].body.parts[0].text
+    const promptText = output.parts[0].text
     expect(promptText).toContain("# Writing Plans")
     expect(promptText).toContain("subagent-driven-development")
     expect(promptText).toContain("The user wants to plan: prompt-injection-spec.md")
@@ -419,11 +386,11 @@ describe("createCommandHook", () => {
       updateState
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "implement", sessionID: "sess-1", arguments: "prompt-injection-plan.md",
     })
 
-    const promptText = client.calls[0].body.parts[0].text
+    const promptText = output.parts[0].text
     expect(promptText).toContain("# Subagent-Driven Development")
     expect(promptText).toContain("spec compliance")
     expect(promptText).toContain("code quality")
@@ -439,11 +406,11 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "brainstorm", sessionID: "sess-1", arguments: "",
     })
 
-    const promptText = client.calls[0].body.parts[0].text
+    const promptText = output.parts[0].text
     expect(promptText).toContain("# Brainstorming Ideas Into Designs")
     expect(promptText).toContain("Ask the user what they'd like to brainstorm.")
   })
@@ -456,11 +423,11 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "plan", sessionID: "sess-1", arguments: "",
     })
 
-    const promptText = client.calls[0].body.parts[0].text
+    const promptText = output.parts[0].text
     expect(promptText).toContain("# Writing Plans")
     expect(promptText).toContain("Ask the user which spec to create a plan for.")
   })
@@ -473,11 +440,11 @@ describe("createCommandHook", () => {
       mockBootstrapCheck("ready")
     )
 
-    await invokeWorkflowCommand(hook, {
+    const output = await invokePhaseCommand(hook, {
       command: "implement", sessionID: "sess-1", arguments: "",
     })
 
-    const promptText = client.calls[0].body.parts[0].text
+    const promptText = output.parts[0].text
     expect(promptText).toContain("# Subagent-Driven Development")
     expect(promptText).toContain("Ask the user which plan to implement.")
   })

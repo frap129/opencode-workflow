@@ -10,7 +10,6 @@ import {
   formatPartialBootstrapError,
   type BootstrapStatus,
 } from "./bootstrap"
-import type { AgentName } from "./constants"
 import { getCachedVariant } from "./session"
 import {
   BRAINSTORM_PHASE_PROMPT,
@@ -63,10 +62,8 @@ const ENTRY_PROMPTS: Record<PhaseName, (args: string) => string> = {
  * Creates the `config` hook callback.
  * Registers 3 slash commands and applies per-phase tool shaping.
  *
- * The `agent` field triggers opencode's internal agent switch, which resets
- * the model variant. To preserve the variant, we cache it via the
- * `chat.message` hook (see src/session.ts) and re-apply it in the
- * command.execute.before hook's prompt body.
+ * The `agent` field on each command triggers opencode's persistent
+ * session-level agent switch when the command pipeline completes.
  */
 export function createConfigHook() {
   return async (config: any) => {
@@ -87,7 +84,11 @@ export function createConfigHook() {
 
 /**
  * Creates the `command.execute.before` hook callback.
- * Gates on bootstrap status, submits phase entry prompts, then aborts pipeline.
+ * Gates on bootstrap status, writes phase entry prompts into output.parts,
+ * then returns normally so opencode's pipeline applies the persistent agent switch.
+ *
+ * workflow-init is a special case: it calls session.prompt() directly with
+ * noReply and aborts the pipeline since no LLM response is needed.
  *
  * @param client - opencode SDK client (captured from PluginInput)
  * @param projectDir - project root directory
@@ -127,7 +128,6 @@ export function createCommandHook(
     if (!phaseNames.has(input.command)) return
 
     const phase = input.command as PhaseName
-    const agent = PHASE_AGENT_MAP[phase]
 
     // Bootstrap gate
     const status = await checkBootstrapFn(projectDir)
@@ -145,19 +145,9 @@ export function createCommandHook(
 
     updateStateFn({ phase })
 
-    // Use the cached variant (captured by chat.message hook BEFORE
-    // opencode's agent switch reset it) so the variant is preserved.
-    const variant = getCachedVariant(input.sessionID)
-    await client.session.prompt({
-      path: { id: input.sessionID },
-      body: {
-        agent,
-        variant,
-        parts: [{ type: "text", text: entryPrompt }],
-      },
-    })
-
-    // Abort the command pipeline so opencode doesn't also send the template
-    throw new Error("__WORKFLOW_HANDLED__")
+    // Write the entry prompt into output.parts and return normally.
+    // This lets opencode's command pipeline complete, which applies the
+    // persistent agent switch from config.command[phase].agent.
+    output.parts.push({ type: "text", text: entryPrompt })
   }
 }
