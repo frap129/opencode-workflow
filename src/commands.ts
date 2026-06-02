@@ -10,7 +10,7 @@ import {
   formatPartialBootstrapError,
   type BootstrapStatus,
 } from "./bootstrap"
-import { getCachedVariant } from "./session"
+import { getCachedVariant, getCachedModel } from "./session"
 import {
   BRAINSTORM_PHASE_PROMPT,
   PLAN_PHASE_PROMPT,
@@ -113,11 +113,13 @@ export function createCommandHook(
     if (input.command === "workflow-init") {
       await forceBootstrapFn(projectDir)
       const initVariant = getCachedVariant(input.sessionID)
+      const initModel = getCachedModel(input.sessionID)
       await client.session.prompt({
         path: { id: input.sessionID },
         body: {
           noReply: true,
           variant: initVariant,
+          model: initModel,
           parts: [{ type: "text", text: "Workflow agent files regenerated (7 agents written to .opencode/agents/)." }],
         },
       })

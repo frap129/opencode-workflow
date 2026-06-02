@@ -13,7 +13,7 @@ import {
   createVerifySpecComplianceTool,
   createCodeReviewTool,
 } from "../src/tools/wrappers"
-import { cacheVariant } from "../src/session"
+import { cacheVariant, cacheModel } from "../src/session"
 
 /**
  * Creates a mock client that records calls to session.prompt().
@@ -99,6 +99,7 @@ let testDir: string
 beforeEach(async () => {
   testDir = await mkdtemp(join(tmpdir(), "wf-wrappers-"))
   cacheVariant("test-session", undefined)
+  cacheModel("test-session", undefined)
 })
 
 afterEach(async () => {
@@ -177,7 +178,35 @@ describe("explore", () => {
     expect(calls[0].body.variant).toBe("thinking")
   })
 
-  test("works without variant set in subtask dispatch", async () => {
+  test("preserves model in subtask dispatch", async () => {
+    cacheModel("test-session", { providerID: "anthropic", modelID: "claude-sonnet" })
+    const { client, calls } = createMockClient()
+    const tool = createExploreTool(client)
+    await tool.execute(
+      { prompt: "Find API handlers" },
+      mockContext(testDir)
+    )
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].body.model).toEqual({ providerID: "anthropic", modelID: "claude-sonnet" })
+  })
+
+  test("preserves both model and variant in subtask dispatch", async () => {
+    cacheVariant("test-session", "thinking")
+    cacheModel("test-session", { providerID: "openai", modelID: "gpt-4o" })
+    const { client, calls } = createMockClient()
+    const tool = createExploreTool(client)
+    await tool.execute(
+      { prompt: "Find API handlers" },
+      mockContext(testDir)
+    )
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].body.variant).toBe("thinking")
+    expect(calls[0].body.model).toEqual({ providerID: "openai", modelID: "gpt-4o" })
+  })
+
+  test("works without variant or model set in subtask dispatch", async () => {
     const { client, calls } = createMockClient()
     const tool = createExploreTool(client)
     await tool.execute(
@@ -187,6 +216,7 @@ describe("explore", () => {
 
     expect(calls).toHaveLength(1)
     expect(calls[0].body.variant).toBeUndefined()
+    expect(calls[0].body.model).toBeUndefined()
   })
 })
 

@@ -14,7 +14,7 @@ import {
   SPEC_REVIEWER_TEMPLATE,
   CODE_QUALITY_REVIEWER_TEMPLATE,
 } from "../prompts"
-import { getCachedVariant } from "../session"
+import { getCachedVariant, getCachedModel } from "../session"
 import { getHeadSha as defaultGetHeadSha } from "../git"
 import { getState as defaultGetState, updateState as defaultUpdateState } from "../state"
 
@@ -72,12 +72,14 @@ async function dispatchSubtask(
 
   try {
     const variant = getCachedVariant(sessionID)
+    const model = getCachedModel(sessionID)
     await client.session.prompt({
       path: { id: sessionID },
       body: {
         agent: callerAgent,
         noReply: true,
         variant,
+        model,
         parts: [
           {
             type: "subtask" as const,
