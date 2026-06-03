@@ -12,12 +12,14 @@ import {
   createInvestigateTool,
   createVerifySpecComplianceTool,
   createCodeReviewTool,
+  dispatchSubtask,
 } from "../src/tools/wrappers"
 import { cacheVariant, cacheModel } from "../src/session"
+import { getState, resetState } from "../src/state"
 
 /**
  * Creates a mock client that records calls to session.prompt().
- * Uses v1 shape: { path: { id }, body: { ... } }
+ * Returns text parts so the direct synchronous path is taken.
  */
 function createMockClient() {
   const calls: any[] = []
@@ -25,8 +27,15 @@ function createMockClient() {
     session: {
       prompt: mock(async (options: any) => {
         calls.push(options)
-        return { data: { id: "msg-123" } }
+        return { data: { info: {}, parts: [{ type: "text", text: "Subtask completed successfully." }] } }
       }),
+      children: mock(async () => ({ data: [] })),
+      messages: mock(async () => ({ data: [] })),
+    },
+    event: {
+      subscribe: mock(async () => ({
+        stream: (async function* () {})(),
+      })),
     },
   }
   return { client, calls }
@@ -56,7 +65,7 @@ function assertDispatchPayload(
   promptSubstring: string
 ) {
   expect(call.path.id).toBe(expectedSessionID)
-  expect(call.body.noReply).toBe(true)
+  expect(call.body.noReply).toBe(false)
   expect(call.body.parts).toHaveLength(1)
   const part = call.body.parts[0]
   expect(part.type).toBe("subtask")
@@ -75,7 +84,7 @@ function assertSuccessResult(parsed: any, expectedAgent: string) {
   expect(parsed.title.length).toBeGreaterThan(0)
   expect(typeof parsed.output).toBe("string")
   expect(parsed.output.length).toBeGreaterThan(0)
-  expect(parsed.metadata.queued).toBe(true)
+  expect(parsed.metadata.queued).toBe(false)
   expect(parsed.metadata.targetAgent).toBe(expectedAgent)
   expect(typeof parsed.metadata.description).toBe("string")
   expect(parsed.metadata.description.length).toBeGreaterThan(0)
@@ -97,6 +106,7 @@ function assertErrorResult(parsed: any, expectedErrorCode: string) {
 let testDir: string
 
 beforeEach(async () => {
+  resetState()
   testDir = await mkdtemp(join(tmpdir(), "wf-wrappers-"))
   cacheVariant("test-session", undefined)
   cacheModel("test-session", undefined)
@@ -152,6 +162,13 @@ describe("explore", () => {
         prompt: mock(async () => {
           throw new Error("network failure")
         }),
+        children: mock(async () => ({ data: [] })),
+        messages: mock(async () => ({ data: [] })),
+      },
+      event: {
+        subscribe: mock(async () => ({
+          stream: (async function* () {})(),
+        })),
       },
     }
     const tool = createExploreTool(client)
@@ -250,7 +267,10 @@ describe("research", () => {
     const client = {
       session: {
         prompt: mock(async () => { throw new Error("timeout") }),
+        children: mock(async () => ({ data: [] })),
+        messages: mock(async () => ({ data: [] })),
       },
+      event: { subscribe: mock(async () => ({ stream: (async function* () {})() })) },
     }
     const tool = createResearchTool(client)
     const result = await tool.execute(
@@ -291,7 +311,10 @@ describe("programmer", () => {
     const client = {
       session: {
         prompt: mock(async () => { throw new Error("server error") }),
+        children: mock(async () => ({ data: [] })),
+        messages: mock(async () => ({ data: [] })),
       },
+      event: { subscribe: mock(async () => ({ stream: (async function* () {})() })) },
     }
     const tool = createProgrammerTool(client, { getHeadSha: mock(async () => "abc") })
     const result = await tool.execute(
@@ -369,7 +392,10 @@ describe("review_spec", () => {
     const client = {
       session: {
         prompt: mock(async () => { throw new Error("dispatch error") }),
+        children: mock(async () => ({ data: [] })),
+        messages: mock(async () => ({ data: [] })),
       },
+      event: { subscribe: mock(async () => ({ stream: (async function* () {})() })) },
     }
     const tool = createReviewSpecTool(client)
     const result = await tool.execute(
@@ -456,7 +482,10 @@ describe("review_plan", () => {
     const client = {
       session: {
         prompt: mock(async () => { throw new Error("dispatch error") }),
+        children: mock(async () => ({ data: [] })),
+        messages: mock(async () => ({ data: [] })),
       },
+      event: { subscribe: mock(async () => ({ stream: (async function* () {})() })) },
     }
     const tool = createReviewPlanTool(client)
     const result = await tool.execute(
@@ -667,4 +696,318 @@ test("code_review errors when no explicit or stored base SHA is available", asyn
 
   expect(result.metadata.queued).toBe(false)
   expect(result.metadata.errorCode).toBe("MISSING_BASE_SHA")
+})
+
+// ── dispatchSubtask direct tests ────────────────────────────────────
+
+const noopMetadata = () => {}
+
+function createDeferredPromptResult() {
+  let resolve!: (value: {
+    data: { info: {}; parts: Array<{ type: "text"; text: string }> }
+  }) => void
+  let reject!: (error: Error) => void
+
+  const promise = new Promise<{
+    data: { info: {}; parts: Array<{ type: "text"; text: string }> }
+  }>((nextResolve, nextReject) => {
+    resolve = nextResolve
+    reject = nextReject
+  })
+
+  return { promise, resolve, reject }
+}
+
+function createDispatchMockClient(overrides: {
+  promptResult?: Promise<any>
+  childrenResults?: Array<Promise<any>>
+  messagesResult?: Promise<any>
+  subscribeStream?: AsyncIterable<any>
+} = {}) {
+  const callOrder: string[] = []
+  let childReadIndex = 0
+  const prompt = mock(async () => {
+    callOrder.push("prompt")
+    return await (overrides.promptResult ?? Promise.resolve({ data: { info: {}, parts: [] } }))
+  })
+  const children = mock(async () => {
+    callOrder.push("children")
+    const next = overrides.childrenResults?.[childReadIndex]
+      ?? overrides.childrenResults?.at(-1)
+      ?? Promise.resolve({ data: [] })
+    childReadIndex += 1
+    return await next
+  })
+  const messages = mock(async () => {
+    callOrder.push("messages")
+    return await (overrides.messagesResult ?? Promise.resolve({ data: [] }))
+  })
+  const subscribe = mock(async () => {
+    callOrder.push("subscribe")
+    return {
+      stream:
+        overrides.subscribeStream ??
+        (async function* () {
+          yield { type: "session.idle", properties: { sessionID: "target-child" } }
+        })(),
+    }
+  })
+
+  return {
+    callOrder,
+    session: {
+      prompt,
+      children,
+      messages,
+    },
+    event: { subscribe },
+  }
+}
+
+test("second dispatch throws before any second SDK round-trip while the first child is still running", async () => {
+  resetState()
+  const deferred = createDeferredPromptResult()
+  const client = createDispatchMockClient({ promptResult: deferred.promise })
+
+  const firstDispatch = dispatchSubtask(
+    client,
+    "session-1",
+    "workflow-plan",
+    "workflow-reviewer",
+    "review this",
+    "Review plan",
+    noopMetadata,
+  )
+
+  // Allow the first dispatch to progress through children/subscribe to prompt
+  await new Promise((r) => setTimeout(r, 10))
+
+  const promptCallsBefore = client.session.prompt.mock.calls.length
+
+  await expect(
+    dispatchSubtask(
+      client,
+      "session-1",
+      "workflow-plan",
+      "workflow-reviewer",
+      "review this again",
+      "Review plan again",
+      noopMetadata,
+    ),
+  ).rejects.toThrow(/SERIAL-ONLY/)
+
+  // The second dispatch must not have added any SDK calls
+  expect(client.session.prompt.mock.calls.length).toBe(promptCallsBefore)
+
+  deferred.resolve({
+    data: {
+      info: {},
+      parts: [{ type: "text", text: "WORKFLOW_VERDICT: APPROVED" }],
+    },
+  })
+
+  const firstResult = JSON.parse(await firstDispatch)
+  expect(firstResult.output).toContain("WORKFLOW_VERDICT: APPROVED")
+  expect(getState().dispatchInProgress).toBe(false)
+  // Verify noReply: false was used
+  expect(client.session.prompt.mock.calls[0][0].body.noReply).toBe(false)
+})
+
+test("dispatchSubtask subscribes before dispatch, ignores unrelated idle events, and reads only the one new child session", async () => {
+  resetState()
+  const client = createDispatchMockClient({
+    promptResult: Promise.resolve({ data: { info: {}, parts: [] } }),
+    childrenResults: [
+      Promise.resolve({
+        data: [
+          { id: "older-child", parentID: "session-1" },
+          { id: "existing-later-child", parentID: "session-1" },
+        ],
+      }),
+      Promise.resolve({
+        data: [
+          { id: "older-child", parentID: "session-1" },
+          { id: "target-child", parentID: "session-1" },
+          { id: "existing-later-child", parentID: "session-1" },
+        ],
+      }),
+    ],
+    messagesResult: Promise.resolve({
+      data: [{ parts: [{ type: "text", text: "WORKFLOW_VERDICT: APPROVED" }] }],
+    }),
+    subscribeStream: (async function* () {
+      yield { type: "session.idle", properties: { sessionID: "older-child" } }
+      yield { type: "session.idle", properties: { sessionID: "target-child" } }
+    })(),
+  })
+
+  const parsed = JSON.parse(
+    await dispatchSubtask(
+      client,
+      "session-1",
+      "workflow-plan",
+      "workflow-reviewer",
+      "review this",
+      "Review plan",
+      noopMetadata,
+    ),
+  )
+
+  expect(client.event.subscribe).toHaveBeenCalledTimes(1)
+  expect(client.callOrder.indexOf("subscribe")).toBeLessThan(client.callOrder.indexOf("prompt"))
+  expect(client.session.prompt.mock.calls[0][0].body.noReply).toBe(false)
+  expect(client.session.messages).toHaveBeenCalledWith({ path: { id: "target-child" } })
+  expect(parsed.output).toContain("WORKFLOW_VERDICT: APPROVED")
+})
+
+test("dispatchSubtask throws when fallback cannot identify exactly one new child session", async () => {
+  resetState()
+  const client = createDispatchMockClient({
+    promptResult: Promise.resolve({ data: { info: {}, parts: [] } }),
+    childrenResults: [
+      Promise.resolve({ data: [{ id: "older-child", parentID: "session-1" }] }),
+      Promise.resolve({
+        data: [
+          { id: "older-child", parentID: "session-1" },
+          { id: "new-child-a", parentID: "session-1" },
+          { id: "new-child-b", parentID: "session-1" },
+        ],
+      }),
+    ],
+  })
+
+  await expect(
+    dispatchSubtask(
+      client,
+      "session-1",
+      "workflow-plan",
+      "workflow-reviewer",
+      "review this",
+      "Review plan",
+      noopMetadata,
+    ),
+  ).rejects.toThrow(/exactly one new child session/)
+})
+
+test("dispatchSubtask throws when fallback returns no text", async () => {
+  resetState()
+  const client = createDispatchMockClient({
+    promptResult: Promise.resolve({ data: { info: {}, parts: [] } }),
+    childrenResults: [
+      Promise.resolve({ data: [] }),
+      Promise.resolve({ data: [{ id: "target-child", parentID: "session-1" }] }),
+    ],
+    messagesResult: Promise.resolve({ data: [{ parts: [] }] }),
+  })
+
+  await expect(
+    dispatchSubtask(
+      client,
+      "session-1",
+      "workflow-plan",
+      "workflow-reviewer",
+      "review this",
+      "Review plan",
+      noopMetadata,
+    ),
+  ).rejects.toThrow(/completed without text output/)
+})
+
+test("dispatchSubtask releases the lock when subscribe fails", async () => {
+  resetState()
+  const client = createDispatchMockClient()
+  client.event.subscribe = mock(async () => {
+    throw new Error("subscribe failed")
+  })
+
+  await expect(
+    dispatchSubtask(
+      client,
+      "session-1",
+      "workflow-plan",
+      "workflow-reviewer",
+      "review this",
+      "Review plan",
+      noopMetadata,
+    ),
+  ).rejects.toThrow("subscribe failed")
+
+  expect(getState().dispatchInProgress).toBe(false)
+})
+
+test("dispatchSubtask releases the lock when the SDK call rejects", async () => {
+  resetState()
+  const client = createDispatchMockClient({ promptResult: Promise.reject(new Error("sdk failed")) })
+
+  await expect(
+    dispatchSubtask(
+      client,
+      "session-1",
+      "workflow-plan",
+      "workflow-reviewer",
+      "review this",
+      "Review plan",
+      noopMetadata,
+    ),
+  ).rejects.toThrow("sdk failed")
+
+  expect(getState().dispatchInProgress).toBe(false)
+})
+
+test("dispatchSubtask throws when the event stream ends before the correlated child goes idle", async () => {
+  resetState()
+  const client = createDispatchMockClient({
+    promptResult: Promise.resolve({ data: { info: {}, parts: [] } }),
+    childrenResults: [
+      Promise.resolve({ data: [] }),
+      Promise.resolve({ data: [{ id: "target-child", parentID: "session-1" }] }),
+    ],
+    subscribeStream: (async function* () {
+      yield { type: "session.idle", properties: { sessionID: "other-child" } }
+    })(),
+  })
+
+  await expect(
+    dispatchSubtask(
+      client,
+      "session-1",
+      "workflow-plan",
+      "workflow-reviewer",
+      "review this",
+      "Review plan",
+      noopMetadata,
+      { idleTimeoutMs: 5 },
+    ),
+  ).rejects.toThrow(/Event stream ended before child session target-child became idle/)
+})
+
+test("dispatchSubtask times out when the correlated child never goes idle", async () => {
+  resetState()
+  const neverEnds = {
+    async *[Symbol.asyncIterator]() {
+      await new Promise(() => {})
+    },
+  }
+
+  const client = createDispatchMockClient({
+    promptResult: Promise.resolve({ data: { info: {}, parts: [] } }),
+    childrenResults: [
+      Promise.resolve({ data: [] }),
+      Promise.resolve({ data: [{ id: "target-child", parentID: "session-1" }] }),
+    ],
+    subscribeStream: neverEnds,
+  })
+
+  await expect(
+    dispatchSubtask(
+      client,
+      "session-1",
+      "workflow-plan",
+      "workflow-reviewer",
+      "review this",
+      "Review plan",
+      noopMetadata,
+      { idleTimeoutMs: 5 },
+    ),
+  ).rejects.toThrow(/Timed out waiting for child session target-child/)
 })

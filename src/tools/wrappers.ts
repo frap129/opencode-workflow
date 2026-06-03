@@ -16,7 +16,7 @@ import {
 } from "../prompts"
 import { getCachedVariant, getCachedModel } from "../session"
 import { getHeadSha as defaultGetHeadSha } from "../git"
-import { getState as defaultGetState, updateState as defaultUpdateState } from "../state"
+import { getState as defaultGetState, updateState as defaultUpdateState, acquireDispatchLock, releaseDispatchLock } from "../state"
 
 // ── Shared helpers ──────────────────────────────────────────────────
 
@@ -55,29 +55,71 @@ function validateFilename(filename: string, regex: RegExp, kind: string): string
   return null
 }
 
+function collectTextParts(parts: Array<{ type: string; text?: string }>): string {
+  return parts
+    .filter((part): part is { type: "text"; text: string } => part.type === "text")
+    .map((part) => part.text)
+    .join("\n")
+    .trim()
+}
+
+async function waitForSessionIdle(
+  stream: AsyncIterable<{ type: string; properties?: { sessionID?: string } }>,
+  childSessionID: string,
+  timeoutMs = 30_000,
+): Promise<void> {
+  const idleEvent = (async () => {
+    for await (const event of stream) {
+      if (event.type === "session.idle" && event.properties?.sessionID === childSessionID) {
+        return
+      }
+    }
+    throw new Error(`Event stream ended before child session ${childSessionID} became idle`)
+  })()
+
+  await Promise.race([
+    idleEvent,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Timed out waiting for child session ${childSessionID} to become idle`)), timeoutMs),
+    ),
+  ])
+}
+
 /**
- * Dispatch a native subtask via client.session.prompt().
- * Returns a structured success or error result string.
+ * Dispatch a native subtask via client.session.prompt() and wait for completion.
+ * Returns a structured success result string.
  */
-async function dispatchSubtask(
+export async function dispatchSubtask(
   client: any,
   sessionID: string,
   callerAgent: string,
   targetAgent: string,
   prompt: string,
   description: string,
-  metadata: (input: { title?: string; metadata?: Record<string, any> }) => void
+  metadata: (input: { title?: string; metadata?: Record<string, any> }) => void,
+  options: { idleTimeoutMs?: number } = {},
 ): Promise<string> {
-  metadata({ title: `Dispatching subtask to ${targetAgent}` })
+  if (!acquireDispatchLock()) {
+    throw new Error(
+      "A subagent dispatch is already in progress. These workflow tools are SERIAL-ONLY. Wait for the current dispatch to finish before starting another.",
+    )
+  }
 
   try {
+    metadata({ title: `Dispatching subtask to ${targetAgent}` })
     const variant = getCachedVariant(sessionID)
     const model = getCachedModel(sessionID)
-    await client.session.prompt({
+
+    const beforeChildren = await client.session.children({ path: { id: sessionID } })
+    const beforeIds = new Set(beforeChildren.data.map((child: any) => child.id))
+
+    const subscription = await client.event.subscribe()
+
+    const response = await client.session.prompt({
       path: { id: sessionID },
       body: {
         agent: callerAgent,
-        noReply: true,
+        noReply: false,
         variant,
         model,
         parts: [
@@ -91,11 +133,57 @@ async function dispatchSubtask(
       },
     })
 
+    const directText = collectTextParts(response.data.parts ?? [])
+    if (directText) {
+      return result({
+        title: `Completed subtask: ${description}`,
+        output: directText,
+        metadata: { queued: false, targetAgent, description },
+      })
+    }
+
+    const afterChildren = await client.session.children({ path: { id: sessionID } })
+    const spawnedChildren = afterChildren.data.filter((child: any) => !beforeIds.has(child.id))
+    if (spawnedChildren.length !== 1) {
+      throw new Error(
+        `Expected exactly one new child session for this dispatch, found ${spawnedChildren.length}`,
+      )
+    }
+
+    const spawnedChild = spawnedChildren[0]
+    await waitForSessionIdle(subscription.stream, spawnedChild.id, options.idleTimeoutMs ?? 30_000)
+
+    const messages = await client.session.messages({ path: { id: spawnedChild.id } })
+    const fallbackText = collectTextParts(messages.data.flatMap((message: any) => message.parts))
+    if (!fallbackText) {
+      throw new Error(`Child session ${spawnedChild.id} completed without text output`)
+    }
+
     return result({
-      title: `Queued subtask: ${description}`,
-      output: `Subtask dispatched to ${targetAgent}. It will run as a child session.`,
-      metadata: { queued: true, targetAgent, description },
+      title: `Completed subtask: ${description}`,
+      output: fallbackText,
+      metadata: { queued: false, targetAgent, description },
     })
+  } finally {
+    releaseDispatchLock()
+  }
+}
+
+/**
+ * Wrapper that calls dispatchSubtask and converts thrown errors to structured error results.
+ * Used by tool execute functions to maintain backward-compatible error reporting.
+ */
+async function safeDispatchSubtask(
+  client: any,
+  sessionID: string,
+  callerAgent: string,
+  targetAgent: string,
+  prompt: string,
+  description: string,
+  metadata: (input: { title?: string; metadata?: Record<string, any> }) => void,
+): Promise<string> {
+  try {
+    return await dispatchSubtask(client, sessionID, callerAgent, targetAgent, prompt, description, metadata)
   } catch (error: any) {
     return errorResult(
       `Failed to dispatch subtask to ${targetAgent}`,
@@ -142,7 +230,7 @@ export function createExploreTool(client: any) {
       const promptError = validatePrompt(args.prompt)
       if (promptError) return promptError
 
-      return dispatchSubtask(
+      return safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,
@@ -174,7 +262,7 @@ export function createResearchTool(client: any) {
       const promptError = validatePrompt(args.prompt)
       if (promptError) return promptError
 
-      return dispatchSubtask(
+      return safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,
@@ -226,7 +314,7 @@ export function createProgrammerTool(
         directory: context.directory,
       })
 
-      return dispatchSubtask(
+      return safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,
@@ -268,7 +356,7 @@ export function createReviewSpecTool(client: any) {
         args.prompt ? `\n## Specific Focus\n\n${args.prompt.trim()}` : "",
       ].filter(Boolean).join("\n")
 
-      return dispatchSubtask(
+      return safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,
@@ -348,7 +436,7 @@ export function createReviewPlanTool(client: any) {
         args.prompt ? `## Specific Focus\n\n${args.prompt.trim()}` : "",
       ].filter(Boolean).join("\n\n")
 
-      return dispatchSubtask(
+      return safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,
@@ -387,7 +475,7 @@ export function createVerifySpecComplianceTool(client: any) {
         "From implementer's report": args.report.trim(),
       })
 
-      return dispatchSubtask(
+      return safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,
@@ -447,7 +535,7 @@ export function createCodeReviewTool(
         DESCRIPTION: args.description.trim(),
       })
 
-      return dispatchSubtask(
+      return safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,
@@ -479,7 +567,7 @@ export function createInvestigateTool(client: any) {
       const promptError = validatePrompt(args.prompt)
       if (promptError) return promptError
 
-      return dispatchSubtask(
+      return safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,

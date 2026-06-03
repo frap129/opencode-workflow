@@ -4,11 +4,23 @@ import type { PhaseName } from "./constants"
 export interface WorkflowState {
   phase: PhaseName | null
   lastBaseSha: string | null
+  dispatchInProgress: boolean
 }
 
 const initialState: WorkflowState = {
   phase: null,
   lastBaseSha: null,
+  dispatchInProgress: false,
+}
+
+export function acquireDispatchLock(): boolean {
+  if (state.dispatchInProgress) return false
+  state.dispatchInProgress = true
+  return true
+}
+
+export function releaseDispatchLock(): void {
+  state.dispatchInProgress = false
 }
 
 let state: WorkflowState = { ...initialState }
