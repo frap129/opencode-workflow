@@ -284,28 +284,145 @@ describe("research", () => {
 
 // ── programmer ──────────────────────────────────────────────────────
 
+const samplePlanText = [
+  "# Implementation Plan",
+  "",
+  "## Chunk 1: Setup",
+  "",
+  "### Task 1: Add constants",
+  "",
+  "Step 1: Write test...",
+  "Step 2: Implement...",
+  "",
+  "### Task 2: Add middleware",
+  "",
+  "Step 1: Write middleware test...",
+  "",
+  "### Task 3: Final wiring",
+  "",
+  "Step 1: Wire it up...",
+].join("\n")
+
+function programmerDeps(overrides: {
+  activePlanFilename?: string | null
+  planText?: string | null
+  headSha?: string
+} = {}) {
+  return {
+    getState: mock(() => ({
+      phase: "implement" as const,
+      lastBaseSha: null,
+      dispatchInProgress: false,
+      activePlanFilename: "activePlanFilename" in overrides ? overrides.activePlanFilename! : "my-plan.md",
+    })),
+    readPlanFile: mock(async () => {
+      if (overrides.planText === null) throw new Error("ENOENT")
+      return overrides.planText ?? samplePlanText
+    }),
+    getHeadSha: mock(async () => overrides.headSha ?? "abc123"),
+    updateState: mock(() => {}),
+  }
+}
+
 describe("programmer", () => {
-  test("dispatches subtask to workflow-programmer with correct prompt", async () => {
+  test("rejects task: 0 -> INVALID_TASK_NUMBER", async () => {
+    const { client } = createMockClient()
+    const tool = createProgrammerTool(client, programmerDeps())
+    const result = await tool.execute({ task: 0 }, mockContext(testDir))
+    assertErrorResult(JSON.parse(result), "INVALID_TASK_NUMBER")
+  })
+
+  test("rejects negative task -> INVALID_TASK_NUMBER", async () => {
+    const { client } = createMockClient()
+    const tool = createProgrammerTool(client, programmerDeps())
+    const result = await tool.execute({ task: -1 }, mockContext(testDir))
+    assertErrorResult(JSON.parse(result), "INVALID_TASK_NUMBER")
+  })
+
+  test("rejects non-integer task -> INVALID_TASK_NUMBER", async () => {
+    const { client } = createMockClient()
+    const tool = createProgrammerTool(client, programmerDeps())
+    const result = await tool.execute({ task: 1.5 }, mockContext(testDir))
+    assertErrorResult(JSON.parse(result), "INVALID_TASK_NUMBER")
+  })
+
+  test("rejects old-style contract { task_name, prompt } -> INVALID_TASK_NUMBER", async () => {
+    const { client } = createMockClient()
+    const tool = createProgrammerTool(client, programmerDeps())
+    const result = await tool.execute({ task_name: "foo", prompt: "bar" } as any, mockContext(testDir))
+    assertErrorResult(JSON.parse(result), "INVALID_TASK_NUMBER")
+  })
+
+  test("fails with NO_ACTIVE_PLAN when activePlanFilename is null", async () => {
+    const { client } = createMockClient()
+    const deps = programmerDeps({ activePlanFilename: null })
+    const tool = createProgrammerTool(client, deps)
+    const result = await tool.execute({ task: 1 }, mockContext(testDir))
+    const parsed = JSON.parse(result)
+    assertErrorResult(parsed, "NO_ACTIVE_PLAN")
+    expect(parsed.output).toContain("read_plan")
+    expect(parsed.output).toContain("write_plan")
+    expect(parsed.output).toContain("edit_plan")
+    expect(parsed.output).toContain("review_plan")
+  })
+
+  test("fails with PLAN_READ_FAILED when active plan file cannot be read", async () => {
+    const { client } = createMockClient()
+    const tool = createProgrammerTool(client, programmerDeps({ planText: null }))
+    const result = await tool.execute({ task: 1 }, mockContext(testDir))
+    const parsed = JSON.parse(result)
+    assertErrorResult(parsed, "PLAN_READ_FAILED")
+    expect(parsed.output).toContain("my-plan.md")
+  })
+
+  test("fails with TASK_NOT_FOUND when task number missing from plan", async () => {
+    const { client } = createMockClient()
+    const tool = createProgrammerTool(client, programmerDeps())
+    const result = await tool.execute({ task: 99 }, mockContext(testDir))
+    const parsed = JSON.parse(result)
+    assertErrorResult(parsed, "TASK_NOT_FOUND")
+    expect(parsed.output).toContain("### Task 99:")
+  })
+
+  test("fails with DUPLICATE_TASK when task heading appears more than once", async () => {
+    const dupPlan = "### Task 1: First\ncontent\n### Task 1: Second\ncontent"
+    const { client } = createMockClient()
+    const tool = createProgrammerTool(client, programmerDeps({ planText: dupPlan }))
+    const result = await tool.execute({ task: 1 }, mockContext(testDir))
+    assertErrorResult(JSON.parse(result), "DUPLICATE_TASK")
+  })
+
+  test("dispatches with verbatim extracted task block, excludes later tasks, includes notes, records lastBaseSha", async () => {
     const { client, calls } = createMockClient()
-    const tool = createProgrammerTool(client, { getHeadSha: mock(async () => "abc") })
+    const deps = programmerDeps({ headSha: "sha-abc" })
+    const tool = createProgrammerTool(client, deps)
     const result = await tool.execute(
-      { task_name: "User registration", prompt: "Implement the user registration endpoint" },
+      { task: 2, notes: "Focus on error handling" },
       mockContext(testDir)
     )
 
     const parsed = JSON.parse(result)
     assertSuccessResult(parsed, "workflow-programmer")
 
+    expect(deps.updateState).toHaveBeenCalledWith({ lastBaseSha: "sha-abc" })
+
     expect(calls).toHaveLength(1)
-    assertDispatchPayload(calls[0], "test-session", "workflow-programmer", "user registration endpoint")
+    const dispatched = calls[0].body.parts[0].prompt
+    expect(dispatched).toContain("### Task 2: Add middleware")
+    expect(dispatched).toContain("Step 1: Write middleware test...")
+    expect(dispatched).not.toContain("### Task 3")
+    expect(dispatched).not.toContain("### Task 1")
+    expect(dispatched).toContain("Focus on error handling")
+    expect(calls[0].body.parts[0].description).toBe("Implement: Add middleware")
   })
 
-  test("rejects empty prompt", async () => {
+  test("dispatches with 'No additional notes provided.' when notes omitted", async () => {
     const { client, calls } = createMockClient()
-    const tool = createProgrammerTool(client, { getHeadSha: mock(async () => "abc") })
-    const result = await tool.execute({ task_name: "Test", prompt: "" }, mockContext(testDir))
-    assertErrorResult(JSON.parse(result), "EMPTY_PROMPT")
-    expect(calls).toHaveLength(0)
+    const tool = createProgrammerTool(client, programmerDeps())
+    await tool.execute({ task: 1 }, mockContext(testDir))
+
+    const dispatched = calls[0].body.parts[0].prompt
+    expect(dispatched).toContain("No additional notes provided.")
   })
 
   test("returns error when dispatch fails", async () => {
@@ -317,11 +434,8 @@ describe("programmer", () => {
       },
       event: { subscribe: mock(async () => ({ stream: (async function* () {})() })) },
     }
-    const tool = createProgrammerTool(client, { getHeadSha: mock(async () => "abc") })
-    const result = await tool.execute(
-      { task_name: "Test", prompt: "Build something" },
-      mockContext(testDir)
-    )
+    const tool = createProgrammerTool(client, programmerDeps())
+    const result = await tool.execute({ task: 1 }, mockContext(testDir))
     assertErrorResult(JSON.parse(result), "DISPATCH_FAILED")
   })
 })
@@ -603,40 +717,19 @@ test("investigate prepends investigate framing and uses workflow-explore", async
   expect(payload.body.parts[0].agent).toBe("workflow-explore")
 })
 
-test("programmer fills template and records lastBaseSha before dispatch", async () => {
+test("programmer fills template with task block from active plan and records lastBaseSha", async () => {
   const { client } = createMockClient()
-  const getHeadSha = mock(async () => "1234567890abcdef1234567890abcdef12345678")
-  const updateState = mock(() => {})
-  const toolDef = createProgrammerTool(client, { getHeadSha, updateState })
+  const deps = programmerDeps({ headSha: "1234567890abcdef" })
+  const toolDef = createProgrammerTool(client, deps)
 
-  await toolDef.execute(
-    {
-      task_name: "Add prompt constants",
-      prompt: "### Task 1\nImplement prompt constants",
-      context: "This is the first task in Chunk 1",
-    },
-    mockContext(testDir)
-  )
+  await toolDef.execute({ task: 1, notes: "First task in Chunk 1" }, mockContext(testDir))
 
-  expect(updateState).toHaveBeenCalledWith({
-    lastBaseSha: "1234567890abcdef1234567890abcdef12345678",
-  })
+  expect(deps.updateState).toHaveBeenCalledWith({ lastBaseSha: "1234567890abcdef" })
 
   const dispatched = client.session.prompt.mock.calls[0][0].body.parts[0].prompt
-  expect(dispatched).toContain("Implement prompt constants")
-  expect(dispatched).toContain("This is the first task in Chunk 1")
+  expect(dispatched).toContain("### Task 1: Add constants")
+  expect(dispatched).toContain("First task in Chunk 1")
   expect(dispatched).toContain(testDir)
-})
-
-test("programmer rejects empty task_name", async () => {
-  const { client } = createMockClient()
-  const getHeadSha = mock(async () => "abc123")
-  const toolDef = createProgrammerTool(client, { getHeadSha })
-  const raw = await toolDef.execute(
-    { task_name: "", prompt: "do something" },
-    mockContext(testDir)
-  )
-  assertErrorResult(JSON.parse(raw), "EMPTY_TASK_NAME")
 })
 
 test("verify_spec_compliance fills requirements and report placeholders", async () => {

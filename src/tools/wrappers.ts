@@ -339,41 +339,99 @@ export function createResearchTool(client: any) {
 }
 
 /**
+ * Default helper to read a plan file from the plans directory.
+ */
+export async function defaultReadPlanFile(directory: string, filename: string): Promise<string> {
+  return readFile(join(directory, PLANS_DIR, filename), "utf-8")
+}
+
+/**
  * Create the `programmer` wrapper tool.
- * Dispatches implementation work to workflow-programmer using the programmer template.
+ * Dispatches a single implementation task from the active plan to workflow-programmer.
  */
 export function createProgrammerTool(
   client: any,
   deps: {
+    getState?: typeof defaultGetState
+    readPlanFile?: (directory: string, filename: string) => Promise<string>
     getHeadSha?: typeof defaultGetHeadSha
     updateState?: typeof defaultUpdateState
   } = {}
 ) {
+  const getState = deps.getState ?? defaultGetState
+  const readPlanFile = deps.readPlanFile ?? defaultReadPlanFile
   const getHeadSha = deps.getHeadSha ?? defaultGetHeadSha
   const updateState = deps.updateState ?? defaultUpdateState
 
   return tool({
-    description: "Dispatch an implementation task to the workflow-programmer subagent using the programmer template.",
+    description:
+      "Dispatch a single implementation task to the workflow-programmer subagent. " +
+      "Reads the task block from the active plan file. Must be called one task at a time.",
     args: {
-      task_name: tool.schema.string().describe("Short task name for the implementation subtask."),
-      prompt: tool.schema.string().describe("Full task text to implement."),
-      context: tool.schema.string().optional().describe("Optional scene-setting context."),
+      task: tool.schema.number().describe("Task number (positive integer) from the active plan's ### Task N: headings."),
+      notes: tool.schema.string().optional().describe("Optional scene-setting context or notes for the programmer."),
     },
     async execute(args, context) {
-      const promptError = validatePrompt(args.prompt)
-      if (promptError) return promptError
-      const taskNameError = validatePrompt(args.task_name)
-      if (taskNameError) {
-        return errorResult("Invalid task name", "Task name must be non-empty.", "EMPTY_TASK_NAME")
+      // Validate task number
+      if (!args.task || !Number.isInteger(args.task) || args.task < 1) {
+        return errorResult(
+          "Invalid task number",
+          `Task must be a positive integer, got: ${args.task}.`,
+          "INVALID_TASK_NUMBER"
+        )
       }
 
+      // Resolve active plan
+      const state = getState()
+      if (!state.activePlanFilename) {
+        return errorResult(
+          "No active plan",
+          "No active plan file is set. Use read_plan, write_plan, edit_plan, or review_plan to target a plan file first.",
+          "NO_ACTIVE_PLAN"
+        )
+      }
+
+      // Read plan file
+      let planText: string
+      try {
+        planText = await readPlanFile(context.directory, state.activePlanFilename)
+      } catch {
+        return errorResult(
+          "Failed to read plan file",
+          `Could not read plan file "${state.activePlanFilename}" from ${PLANS_DIR}.`,
+          "PLAN_READ_FAILED"
+        )
+      }
+
+      // Extract task block
+      const taskBlock = extractTask(planText, args.task)
+      if (taskBlock === null) {
+        return errorResult(
+          "Task not found",
+          `Could not find ### Task ${args.task}: heading in the active plan.`,
+          "TASK_NOT_FOUND"
+        )
+      }
+      if (taskBlock === "DUPLICATE") {
+        return errorResult(
+          "Duplicate task heading",
+          `Found duplicate ### Task ${args.task}: headings in the active plan.`,
+          "DUPLICATE_TASK"
+        )
+      }
+
+      // Extract task name from heading
+      const headingMatch = taskBlock.match(/^### Task \d+:\s*(.*)/)
+      const taskName = headingMatch?.[1]?.trim() || `Task ${args.task}`
+
+      // Record base SHA before dispatch
       const lastBaseSha = await getHeadSha(context.directory)
       updateState({ lastBaseSha })
 
       const prompt = fillTemplate(PROGRAMMER_TEMPLATE, {
-        "task name": args.task_name.trim(),
-        "FULL TEXT of task": args.prompt.trim(),
-        "Scene-setting context": args.context?.trim() ?? "No additional context provided.",
+        "task name": taskName,
+        "FULL TEXT of task": taskBlock,
+        "Scene-setting context": args.notes?.trim() || "No additional notes provided.",
         directory: context.directory,
       })
 
@@ -383,7 +441,7 @@ export function createProgrammerTool(
         context.agent,
         "workflow-programmer",
         prompt,
-        `Implement: ${args.task_name.trim()}`,
+        `Implement: ${taskName}`,
         context.metadata
       )
     },
