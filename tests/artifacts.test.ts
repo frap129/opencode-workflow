@@ -501,6 +501,13 @@ describe("active plan tracking", () => {
       mockContext(testDir)
     )
     expect(getState().activePlanFilename).toBeNull()
+
+    const editTool = createEditSpecTool()
+    await editTool.execute(
+      { filename: "track-spec.md", old_text: "# Spec", new_text: "# Updated Spec" },
+      mockContext(testDir)
+    )
+    expect(getState().activePlanFilename).toBeNull()
   })
 
   test("edit_plan does NOT set activePlanFilename on error (text not found)", async () => {
