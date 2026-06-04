@@ -195,6 +195,34 @@ async function safeDispatchSubtask(
 
 // ── Tool factories ──────────────────────────────────────────────────
 
+/**
+ * Extract a `### Task N:` block from plan text.
+ * Returns the verbatim text from the heading to just before the next `### Task` heading or EOF.
+ * Returns null if the task number is not found.
+ * Returns "DUPLICATE" if the task heading appears more than once.
+ */
+export function extractTask(planText: string, taskNumber: number): string | null {
+  const lines = planText.split("\n")
+  const pattern = new RegExp(`^### Task ${taskNumber}:`)
+
+  // Check for duplicates
+  const matchingLines = lines.filter((line) => pattern.test(line))
+  if (matchingLines.length > 1) return "DUPLICATE"
+  if (matchingLines.length === 0) return null
+
+  const startIndex = lines.findIndex((line) => pattern.test(line))
+
+  let endIndex = lines.length
+  for (let i = startIndex + 1; i < lines.length; i += 1) {
+    if (/^### Task \d+:/.test(lines[i])) {
+      endIndex = i
+      break
+    }
+  }
+
+  return lines.slice(startIndex, endIndex).join("\n")
+}
+
 function extractPlanChunk(planText: string, chunkNumber: number): string | null {
   const lines = planText.split("\n")
   const startIndex = lines.findIndex((line) => line.startsWith(`## Chunk ${chunkNumber}:`))

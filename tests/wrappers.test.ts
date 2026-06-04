@@ -13,6 +13,7 @@ import {
   createVerifySpecComplianceTool,
   createCodeReviewTool,
   dispatchSubtask,
+  extractTask,
 } from "../src/tools/wrappers"
 import { cacheVariant, cacheModel } from "../src/session"
 import { getState, resetState } from "../src/state"
@@ -979,6 +980,103 @@ test("dispatchSubtask throws when the event stream ends before the correlated ch
       { idleTimeoutMs: 5 },
     ),
   ).rejects.toThrow(/Event stream ended before child session target-child became idle/)
+})
+
+// ── extractTask ─────────────────────────────────────────────────────
+
+describe("extractTask", () => {
+  const samplePlan = [
+    "# Implementation Plan",
+    "",
+    "## Chunk 1: Setup",
+    "",
+    "### Task 1: Add constants",
+    "",
+    "Step 1: Write test...",
+    "Step 2: Implement...",
+    "",
+    "### Task 2: Add middleware",
+    "",
+    "Step 1: Write test...",
+    "",
+    "### Task 3: Final wiring",
+    "",
+    "Step 1: Wire it up...",
+  ].join("\n")
+
+  test("extracts middle task (Task 2) with content up to next task", () => {
+    const result = extractTask(samplePlan, 2)
+    expect(result).not.toBeNull()
+    expect(result!.startsWith("### Task 2: Add middleware")).toBe(true)
+    expect(result).toContain("Step 1: Write test...")
+    expect(result).not.toContain("### Task 3")
+    expect(result).not.toContain("### Task 1")
+  })
+
+  test("extracts final task (Task 3) through EOF", () => {
+    const result = extractTask(samplePlan, 3)
+    expect(result).not.toBeNull()
+    expect(result!.startsWith("### Task 3: Final wiring")).toBe(true)
+    expect(result).toContain("Step 1: Wire it up...")
+  })
+
+  test("extracts first task", () => {
+    const result = extractTask(samplePlan, 1)
+    expect(result).not.toBeNull()
+    expect(result!.startsWith("### Task 1: Add constants")).toBe(true)
+    expect(result).toContain("Step 2: Implement...")
+    expect(result).not.toContain("### Task 2")
+  })
+
+  test("returns null for missing task number", () => {
+    const result = extractTask(samplePlan, 99)
+    expect(result).toBeNull()
+  })
+
+  test("returns 'DUPLICATE' error string for duplicate task headings", () => {
+    const dupPlan = [
+      "### Task 1: First version",
+      "content A",
+      "### Task 1: Second version",
+      "content B",
+    ].join("\n")
+    const result = extractTask(dupPlan, 1)
+    expect(result).toBe("DUPLICATE")
+  })
+
+  test("preserves verbatim content including blank lines", () => {
+    const planWithBlanks = [
+      "### Task 1: Setup",
+      "",
+      "- [ ] Step 1: do thing",
+      "",
+      "```ts",
+      "const x = 1",
+      "```",
+      "",
+      "### Task 2: Next",
+    ].join("\n")
+    const result = extractTask(planWithBlanks, 1)
+    expect(result).toContain("```ts\nconst x = 1\n```")
+    expect(result).not.toContain("### Task 2")
+  })
+
+  test("ignores malformed headings (no colon, non-numeric)", () => {
+    const malformedPlan = [
+      "### Task 1 no colon here",
+      "not a real task",
+      "### Task One: spelled out",
+      "also not real",
+      "### Task 1: Real task",
+      "real content",
+    ].join("\n")
+    const result = extractTask(malformedPlan, 1)
+    expect(result).not.toBeNull()
+    expect(result!.startsWith("### Task 1: Real task")).toBe(true)
+    expect(result).toContain("real content")
+    // The malformed lines should not be matched as task headings
+    expect(result).not.toContain("no colon here")
+  })
 })
 
 test("dispatchSubtask times out when the correlated child never goes idle", async () => {
