@@ -435,7 +435,7 @@ export function createProgrammerTool(
         directory: context.directory,
       })
 
-      return safeDispatchSubtask(
+      const dispatchResult = await safeDispatchSubtask(
         client,
         context.sessionID,
         context.agent,
@@ -444,6 +444,15 @@ export function createProgrammerTool(
         `Implement: ${taskName}`,
         context.metadata
       )
+
+      // Append review nudge to successful dispatch results only
+      const parsed = JSON.parse(dispatchResult)
+      if (!parsed.metadata?.errorCode) {
+        parsed.output += "\n\n---\nNEXT REQUIRED REVIEWS:\n1. run verify_spec_compliance\n2. then run code_review"
+        return JSON.stringify(parsed)
+      }
+
+      return dispatchResult
     },
   })
 }

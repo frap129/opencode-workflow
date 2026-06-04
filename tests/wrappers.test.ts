@@ -438,6 +438,40 @@ describe("programmer", () => {
     const result = await tool.execute({ task: 1 }, mockContext(testDir))
     assertErrorResult(JSON.parse(result), "DISPATCH_FAILED")
   })
+
+  test("successful dispatch appends NEXT REQUIRED REVIEWS nudge", async () => {
+    const { client } = createMockClient()
+    const tool = createProgrammerTool(client, programmerDeps())
+    const result = await tool.execute({ task: 1 }, mockContext(testDir))
+    const parsed = JSON.parse(result)
+
+    expect(parsed.output).toContain("NEXT REQUIRED REVIEWS")
+    expect(parsed.output).toContain("verify_spec_compliance")
+    expect(parsed.output).toContain("code_review")
+    expect(parsed.output).toContain("1. run verify_spec_compliance")
+    expect(parsed.output).toContain("2. then run code_review")
+
+    // verify_spec_compliance must appear before code_review in the nudge
+    const nudgeStart = parsed.output.indexOf("NEXT REQUIRED REVIEWS")
+    const specIdx = parsed.output.indexOf("verify_spec_compliance", nudgeStart)
+    const codeIdx = parsed.output.indexOf("code_review", nudgeStart)
+    expect(specIdx).toBeLessThan(codeIdx)
+  })
+
+  test("error dispatch does NOT include NEXT REQUIRED REVIEWS nudge", async () => {
+    const client = {
+      session: {
+        prompt: mock(async () => { throw new Error("server error") }),
+        children: mock(async () => ({ data: [] })),
+        messages: mock(async () => ({ data: [] })),
+      },
+      event: { subscribe: mock(async () => ({ stream: (async function* () {})() })) },
+    }
+    const tool = createProgrammerTool(client, programmerDeps())
+    const result = await tool.execute({ task: 1 }, mockContext(testDir))
+    const parsed = JSON.parse(result)
+    expect(parsed.output).not.toContain("NEXT REQUIRED REVIEWS")
+  })
 })
 
 // ── review_spec ─────────────────────────────────────────────────────
