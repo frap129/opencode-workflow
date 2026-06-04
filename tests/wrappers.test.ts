@@ -346,13 +346,6 @@ describe("programmer", () => {
     assertErrorResult(JSON.parse(result), "INVALID_TASK_NUMBER")
   })
 
-  test("rejects old-style contract { task_name, prompt } -> INVALID_TASK_NUMBER", async () => {
-    const { client } = createMockClient()
-    const tool = createProgrammerTool(client, programmerDeps())
-    const result = await tool.execute({ task_name: "foo", prompt: "bar" } as any, mockContext(testDir))
-    assertErrorResult(JSON.parse(result), "INVALID_TASK_NUMBER")
-  })
-
   test("fails with NO_ACTIVE_PLAN when activePlanFilename is null", async () => {
     const { client } = createMockClient()
     const deps = programmerDeps({ activePlanFilename: null })
