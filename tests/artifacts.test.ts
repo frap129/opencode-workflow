@@ -366,7 +366,7 @@ describe("review nudges", () => {
 // ── edit_spec ───────────────────────────────────────────────────────
 
 describe("edit_spec", () => {
-  test("replaces exactly one matching block and includes nudge", async () => {
+  test("replaces exactly one matching block and includes strong nudge for review", async () => {
     await writeFile(join(plansDir, "my-feature-spec.md"), "# Title\n\nOld section.\n\nFin.")
     const tool = createEditSpecTool()
     const result = await tool.execute(
@@ -375,7 +375,9 @@ describe("edit_spec", () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.metadata.success).toBe(true)
-    expect(parsed.output).toContain("Call 'review_spec' to review the changes.")
+    expect(parsed.output).toContain("✅ Updated my-feature-spec.md")
+    expect(parsed.output).toContain("NEXT REQUIRED STEP")
+    expect(parsed.output).toContain("review_spec")
 
     const content = await readFile(join(plansDir, "my-feature-spec.md"), "utf-8")
     expect(content).toBe("# Title\n\nNew section.\n\nFin.")
@@ -407,6 +409,20 @@ describe("edit_plan", () => {
     const parsed = JSON.parse(result)
     expect(parsed.metadata.success).toBe(false)
     expect(parsed.metadata.errorCode).toBe("TEXT_NOT_FOUND")
+  })
+
+  test("edit_plan includes strong nudge for review", async () => {
+    await writeFile(join(plansDir, "my-feature-plan.md"), "# Plan\n\nOld content.")
+    const tool = createEditPlanTool()
+    const result = await tool.execute(
+      { filename: "my-feature-plan.md", old_text: "Old content.", new_text: "New content." },
+      mockContext(testDir)
+    )
+    const parsed = JSON.parse(result)
+    expect(parsed.metadata.success).toBe(true)
+    expect(parsed.output).toContain("✅ Updated my-feature-plan.md")
+    expect(parsed.output).toContain("NEXT REQUIRED STEP")
+    expect(parsed.output).toContain("review_plan")
   })
 
   test("allows empty new_text for deletion", async () => {

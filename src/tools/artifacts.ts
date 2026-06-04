@@ -233,8 +233,8 @@ async function editArtifact(params: {
   await writeFile(filePath, updated, "utf-8")
 
   return result({
-    title: `Edited ${filename}`,
-    output: `Successfully edited "${filename}". ${reviewNudge}`,
+    title: `Updated ${filename}`,
+    output: `✅ Updated ${filename}\nNEXT REQUIRED STEP: this artifact was modified. Re-review is required before proceeding. Run ${reviewNudge} for this file.`,
     metadata: { success: true, filename, bytes: updated.length },
   })
 }
@@ -262,7 +262,7 @@ export function createEditSpecTool() {
           kind: "spec",
           oldText: args.old_text,
           newText: args.new_text,
-          reviewNudge: "Call 'review_spec' to review the changes.",
+          reviewNudge: "review_spec",
         })
       } catch (err: any) {
         if (err.code === "ENOENT") {
@@ -301,7 +301,7 @@ export function createEditPlanTool() {
           kind: "plan",
           oldText: args.old_text,
           newText: args.new_text,
-          reviewNudge: "Call 'review_plan' to review the changes.",
+          reviewNudge: "review_plan",
         })
       } catch (err: any) {
         if (err.code === "ENOENT") {
