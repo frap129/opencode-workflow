@@ -1130,13 +1130,16 @@ describe("extractTask", () => {
   })
 
   test("does not report DUPLICATE for ### Task heading inside an indented fenced code block", () => {
+    // Regression: fence opening indented up to 3 spaces is valid per CommonMark.
+    // The embedded heading has NO leading spaces so it WOULD match ^### Task
+    // if the parser failed to recognise the indented fence as a code block.
     const plan = [
       "### Task 1: Real task",
       "",
       "Some content.",
       "",
       "   ```",
-      "   ### Task 1: This is inside an indented code block",
+      "### Task 1: This heading is inside an indented fence",
       "   ```",
       "",
       "More content.",
@@ -1146,7 +1149,7 @@ describe("extractTask", () => {
     const result = extractTask(plan, 1)
     expect(result).not.toBe("DUPLICATE")
     expect(result).not.toBeNull()
-    expect(result).toContain("### Task 1: This is inside an indented code block")
+    expect(result).toContain("### Task 1: This heading is inside an indented fence")
     expect(result).toContain("More content.")
     expect(result).not.toContain("### Task 2")
   })
