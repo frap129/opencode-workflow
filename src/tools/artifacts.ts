@@ -3,6 +3,7 @@ import { tool } from "@opencode-ai/plugin"
 import { readFile, writeFile, mkdir } from "node:fs/promises"
 import { join } from "node:path"
 import { PLANS_DIR, SPEC_FILENAME_REGEX, PLAN_FILENAME_REGEX } from "../constants"
+import { updateState } from "../state"
 
 /** Structured tool result — serialized to JSON for the model */
 interface ToolResult {
@@ -131,6 +132,7 @@ export function createReadPlanTool() {
 
       try {
         const content = await readFile(filePath, "utf-8")
+        updateState({ activePlanFilename: args.filename })
         return result({
           title: `Read ${args.filename}`,
           output: content,
@@ -171,6 +173,8 @@ export function createWritePlanTool() {
 
       await mkdir(join(context.directory, PLANS_DIR), { recursive: true })
       await writeFile(filePath, args.content, "utf-8")
+
+      updateState({ activePlanFilename: args.filename })
 
       return result({
         title: `Wrote ${args.filename}`,
@@ -294,7 +298,7 @@ export function createEditPlanTool() {
     async execute(args, context) {
       context.metadata({ title: `Editing ${args.filename}` })
       try {
-        return await editArtifact({
+        const editResult = await editArtifact({
           directory: context.directory,
           filename: args.filename,
           filenameRegex: PLAN_FILENAME_REGEX,
@@ -303,6 +307,11 @@ export function createEditPlanTool() {
           newText: args.new_text,
           reviewNudge: "review_plan",
         })
+        const parsed = JSON.parse(editResult)
+        if (parsed.metadata.success) {
+          updateState({ activePlanFilename: args.filename })
+        }
+        return editResult
       } catch (err: any) {
         if (err.code === "ENOENT") {
           return errorResult(

@@ -12,6 +12,7 @@ import {
   createEditPlanTool,
 } from "../src/tools/artifacts"
 import { PLANS_DIR } from "../src/constants"
+import { getState, resetState } from "../src/state"
 
 /**
  * Minimal mock ToolContext for direct execute() calls.
@@ -34,6 +35,7 @@ let testDir: string
 let plansDir: string
 
 beforeEach(async () => {
+  resetState()
   testDir = await mkdtemp(join(tmpdir(), "wf-artifacts-"))
   plansDir = join(testDir, PLANS_DIR)
   await mkdir(plansDir, { recursive: true })
@@ -441,5 +443,73 @@ describe("edit_plan", () => {
 
     const content = await readFile(join(plansDir, "delete-plan.md"), "utf-8")
     expect(content).toBe("Keep this.")
+  })
+})
+
+// ── active plan tracking ────────────────────────────────────────────
+
+describe("active plan tracking", () => {
+  test("write_plan sets activePlanFilename in state", async () => {
+    const tool = createWritePlanTool()
+    await tool.execute(
+      { filename: "track-plan.md", content: "# Plan" },
+      mockContext(testDir)
+    )
+    expect(getState().activePlanFilename).toBe("track-plan.md")
+  })
+
+  test("read_plan sets activePlanFilename in state", async () => {
+    await writeFile(join(plansDir, "read-track-plan.md"), "# Content")
+    const tool = createReadPlanTool()
+    await tool.execute(
+      { filename: "read-track-plan.md" },
+      mockContext(testDir)
+    )
+    expect(getState().activePlanFilename).toBe("read-track-plan.md")
+  })
+
+  test("edit_plan sets activePlanFilename in state", async () => {
+    await writeFile(join(plansDir, "edit-track-plan.md"), "# Old content")
+    const tool = createEditPlanTool()
+    await tool.execute(
+      { filename: "edit-track-plan.md", old_text: "Old content", new_text: "New content" },
+      mockContext(testDir)
+    )
+    expect(getState().activePlanFilename).toBe("edit-track-plan.md")
+  })
+
+  test("read_plan does NOT set activePlanFilename on error (file not found)", async () => {
+    const tool = createReadPlanTool()
+    await tool.execute(
+      { filename: "missing-plan.md" },
+      mockContext(testDir)
+    )
+    expect(getState().activePlanFilename).toBeNull()
+  })
+
+  test("spec tools do NOT set activePlanFilename", async () => {
+    const writeTool = createWriteSpecTool()
+    await writeTool.execute(
+      { filename: "track-spec.md", content: "# Spec" },
+      mockContext(testDir)
+    )
+    expect(getState().activePlanFilename).toBeNull()
+
+    const readTool = createReadSpecTool()
+    await readTool.execute(
+      { filename: "track-spec.md" },
+      mockContext(testDir)
+    )
+    expect(getState().activePlanFilename).toBeNull()
+  })
+
+  test("edit_plan does NOT set activePlanFilename on error (text not found)", async () => {
+    await writeFile(join(plansDir, "no-match-plan.md"), "# Content")
+    const tool = createEditPlanTool()
+    await tool.execute(
+      { filename: "no-match-plan.md", old_text: "nonexistent", new_text: "replacement" },
+      mockContext(testDir)
+    )
+    expect(getState().activePlanFilename).toBeNull()
   })
 })
