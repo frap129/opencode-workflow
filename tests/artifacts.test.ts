@@ -375,9 +375,11 @@ describe("edit_spec", () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.metadata.success).toBe(true)
-    expect(parsed.output).toContain("✅ Updated my-feature-spec.md")
-    expect(parsed.output).toContain("NEXT REQUIRED STEP")
-    expect(parsed.output).toContain("review_spec")
+    expect(parsed.title).toBe("Updated my-feature-spec.md")
+    expect(parsed.output).toBe(
+      "✅ Updated my-feature-spec.md\n" +
+      "NEXT REQUIRED STEP: this artifact was modified. Re-review is required before proceeding. Run review_spec for this file."
+    )
 
     const content = await readFile(join(plansDir, "my-feature-spec.md"), "utf-8")
     expect(content).toBe("# Title\n\nNew section.\n\nFin.")
@@ -420,9 +422,11 @@ describe("edit_plan", () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.metadata.success).toBe(true)
-    expect(parsed.output).toContain("✅ Updated my-feature-plan.md")
-    expect(parsed.output).toContain("NEXT REQUIRED STEP")
-    expect(parsed.output).toContain("review_plan")
+    expect(parsed.title).toBe("Updated my-feature-plan.md")
+    expect(parsed.output).toBe(
+      "✅ Updated my-feature-plan.md\n" +
+      "NEXT REQUIRED STEP: this artifact was modified. Re-review is required before proceeding. Run review_plan for this file."
+    )
   })
 
   test("allows empty new_text for deletion", async () => {
