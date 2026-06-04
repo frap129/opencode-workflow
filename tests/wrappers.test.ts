@@ -363,7 +363,7 @@ describe("programmer", () => {
     expect(parsed.output).toContain("read_plan")
     expect(parsed.output).toContain("write_plan")
     expect(parsed.output).toContain("edit_plan")
-    expect(parsed.output).toContain("review_plan")
+    expect(parsed.output).not.toContain("review_plan")
   })
 
   test("fails with PLAN_READ_FAILED when active plan file cannot be read", async () => {
