@@ -1198,6 +1198,50 @@ describe("extractTask", () => {
     expect(result).toContain("More content.")
   })
 
+  test("does not stop early when inner ``` appears inside an outer ```` fence", () => {
+    const plan = [
+      "### Task 1: Setup",
+      "",
+      "````markdown",
+      "```",
+      "inner code",
+      "```",
+      "### Task 2: Example heading inside outer fence",
+      "````",
+      "",
+      "More Task 1 content.",
+      "",
+      "### Task 2: Real task two",
+      "Task 2 content.",
+    ].join("\n")
+    const result = extractTask(plan, 1)
+    expect(result).not.toBeNull()
+    expect(result).toContain("### Task 2: Example heading inside outer fence")
+    expect(result).toContain("More Task 1 content.")
+    expect(result).not.toContain("Task 2 content.")
+  })
+
+  test("does not report DUPLICATE when inner ~~~ appears inside an outer ~~~~ fence", () => {
+    const plan = [
+      "### Task 1: Real task",
+      "",
+      "~~~~",
+      "~~~",
+      "### Task 1: Looks like a duplicate but inside outer fence",
+      "~~~",
+      "~~~~",
+      "",
+      "More content.",
+      "",
+      "### Task 2: Next task",
+    ].join("\n")
+    const result = extractTask(plan, 1)
+    expect(result).not.toBe("DUPLICATE")
+    expect(result).not.toBeNull()
+    expect(result).toContain("### Task 1: Looks like a duplicate but inside outer fence")
+    expect(result).toContain("More content.")
+  })
+
   test("ignores malformed headings (no colon, non-numeric)", () => {
     const malformedPlan = [
       "### Task 1 no colon here",

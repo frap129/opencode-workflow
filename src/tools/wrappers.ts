@@ -207,15 +207,18 @@ export function extractTask(planText: string, taskNumber: number): string | null
 
   // Check for duplicates — only count headings outside fenced code blocks
   let fenceMarker: string | null = null
+  let fenceLen = 0
   let matchCount = 0
   let firstMatchIndex = -1
   for (let i = 0; i < lines.length; i += 1) {
     const fm = lines[i].match(/^ {0,3}(`{3,}|~{3,})/)
     if (fm) {
       const char = fm[1][0]
+      const len = fm[1].length
       if (fenceMarker === null) {
         fenceMarker = char
-      } else if (char === fenceMarker) {
+        fenceLen = len
+      } else if (char === fenceMarker && len >= fenceLen) {
         fenceMarker = null
       }
       continue
@@ -231,14 +234,17 @@ export function extractTask(planText: string, taskNumber: number): string | null
 
   // Find end — skip headings inside fenced code blocks
   fenceMarker = null
+  fenceLen = 0
   let endIndex = lines.length
   for (let i = firstMatchIndex + 1; i < lines.length; i += 1) {
     const fm = lines[i].match(/^ {0,3}(`{3,}|~{3,})/)
     if (fm) {
       const char = fm[1][0]
+      const len = fm[1].length
       if (fenceMarker === null) {
         fenceMarker = char
-      } else if (char === fenceMarker) {
+        fenceLen = len
+      } else if (char === fenceMarker && len >= fenceLen) {
         fenceMarker = null
       }
       continue
