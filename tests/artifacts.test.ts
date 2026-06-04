@@ -344,7 +344,9 @@ describe("review nudges", () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.metadata.success).toBe(true)
-    expect(parsed.output).toContain("Call 'review_spec' to review it.")
+    expect(parsed.output).toContain("✅ Wrote nudge-spec.md")
+    expect(parsed.output).toContain("NEXT REQUIRED STEP")
+    expect(parsed.output).toContain("review_spec")
   })
 
   test("write_plan includes review nudge", async () => {
@@ -355,7 +357,9 @@ describe("review nudges", () => {
     )
     const parsed = JSON.parse(result)
     expect(parsed.metadata.success).toBe(true)
-    expect(parsed.output).toContain("Call 'review_plan' to review it.")
+    expect(parsed.output).toContain("✅ Wrote nudge-plan.md")
+    expect(parsed.output).toContain("NEXT REQUIRED STEP")
+    expect(parsed.output).toContain("review_plan")
   })
 })
 

@@ -104,7 +104,7 @@ export function createWriteSpecTool() {
 
       return result({
         title: `Wrote ${args.filename}`,
-        output: `Successfully wrote ${args.filename} to ${PLANS_DIR}/. Spec written. Call 'review_spec' to review it.`,
+        output: `✅ Wrote ${args.filename}\nNEXT REQUIRED STEP: run review_spec for this file before treating the spec as complete.`,
         metadata: { success: true, filename: args.filename, bytes: args.content.length },
       })
     },
@@ -174,7 +174,7 @@ export function createWritePlanTool() {
 
       return result({
         title: `Wrote ${args.filename}`,
-        output: `Successfully wrote ${args.filename} to ${PLANS_DIR}/. Plan written. Call 'review_plan' to review it.`,
+        output: `✅ Wrote ${args.filename}\nNEXT REQUIRED STEP: run review_plan for this file before treating the plan as complete.`,
         metadata: { success: true, filename: args.filename, bytes: args.content.length },
       })
     },
