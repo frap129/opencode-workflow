@@ -210,7 +210,7 @@ export function extractTask(planText: string, taskNumber: number): string | null
   let matchCount = 0
   let firstMatchIndex = -1
   for (let i = 0; i < lines.length; i += 1) {
-    if (/^```/.test(lines[i])) {
+    if (/^ {0,3}(`{3,}|~{3,})/.test(lines[i])) {
       inFence = !inFence
       continue
     }
@@ -227,7 +227,7 @@ export function extractTask(planText: string, taskNumber: number): string | null
   inFence = false
   let endIndex = lines.length
   for (let i = firstMatchIndex + 1; i < lines.length; i += 1) {
-    if (/^```/.test(lines[i])) {
+    if (/^ {0,3}(`{3,}|~{3,})/.test(lines[i])) {
       inFence = !inFence
       continue
     }
