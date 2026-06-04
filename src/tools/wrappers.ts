@@ -556,6 +556,8 @@ export function createReviewPlanTool(client: any) {
         )
       }
 
+      defaultUpdateState({ activePlanFilename: args.filename })
+
       const reviewPrompt = [
         fillTemplate(PLAN_DOCUMENT_REVIEWER_TEMPLATE, {
           PLAN_FILE_PATH: args.filename,

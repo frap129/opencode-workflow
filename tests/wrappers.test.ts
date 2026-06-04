@@ -16,7 +16,7 @@ import {
   extractTask,
 } from "../src/tools/wrappers"
 import { cacheVariant, cacheModel } from "../src/session"
-import { getState, resetState } from "../src/state"
+import { getState, resetState, updateState } from "../src/state"
 
 /**
  * Creates a mock client that records calls to session.prompt().
@@ -642,6 +642,49 @@ describe("review_plan", () => {
       mockContext(testDir)
     )
     assertErrorResult(JSON.parse(result), "DISPATCH_FAILED")
+  })
+
+  test("sets activePlanFilename in state after successful file read", async () => {
+    await mkdir(join(testDir, ".opencode/plans"), { recursive: true })
+    await writeFile(join(testDir, ".opencode/plans", "my-feature-plan.md"), "# My Feature Plan\n\nSome content\n")
+
+    const { client } = createMockClient()
+    const tool = createReviewPlanTool(client)
+    await tool.execute(
+      { filename: "my-feature-plan.md" },
+      mockContext(testDir)
+    )
+
+    expect(getState().activePlanFilename).toBe("my-feature-plan.md")
+  })
+
+  test("does NOT set activePlanFilename when file not found", async () => {
+    updateState({ activePlanFilename: "existing-plan.md" })
+
+    const { client } = createMockClient()
+    const tool = createReviewPlanTool(client)
+    const result = await tool.execute(
+      { filename: "nonexistent-plan.md" },
+      mockContext(testDir)
+    )
+
+    assertErrorResult(JSON.parse(result), "FILE_NOT_FOUND")
+    expect(getState().activePlanFilename).toBe("existing-plan.md")
+  })
+
+  test("does NOT set activePlanFilename when chunk not found", async () => {
+    await mkdir(join(testDir, ".opencode/plans"), { recursive: true })
+    await writeFile(join(testDir, ".opencode/plans", "my-feature-plan.md"), "# My Feature Plan\n\nSome content\n")
+
+    const { client } = createMockClient()
+    const tool = createReviewPlanTool(client)
+    const result = await tool.execute(
+      { filename: "my-feature-plan.md", chunk: 99 },
+      mockContext(testDir)
+    )
+
+    assertErrorResult(JSON.parse(result), "CHUNK_NOT_FOUND")
+    expect(getState().activePlanFilename).toBeNull()
   })
 })
 
