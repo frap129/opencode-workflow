@@ -642,6 +642,8 @@ describe("review_plan", () => {
       mockContext(testDir)
     )
     assertErrorResult(JSON.parse(result), "DISPATCH_FAILED")
+    // activePlanFilename must be set before dispatch, so it survives dispatch failure
+    expect(getState().activePlanFilename).toBe("my-feature-plan.md")
   })
 
   test("sets activePlanFilename in state after successful file read", async () => {
