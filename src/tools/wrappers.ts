@@ -386,7 +386,7 @@ export function createProgrammerTool(
       if (!state.activePlanFilename) {
         return errorResult(
           "No active plan",
-          "No active plan file is set. Use read_plan, write_plan, or edit_plan to target a plan file first.",
+          "No active plan file is set. Use read_plan, write_plan, edit_plan, or review_plan to target a plan file first.",
           "NO_ACTIVE_PLAN"
         )
       }
