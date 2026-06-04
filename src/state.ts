@@ -5,12 +5,14 @@ export interface WorkflowState {
   phase: PhaseName | null
   lastBaseSha: string | null
   dispatchInProgress: boolean
+  activePlanFilename: string | null
 }
 
 const initialState: WorkflowState = {
   phase: null,
   lastBaseSha: null,
   dispatchInProgress: false,
+  activePlanFilename: null,
 }
 
 export function acquireDispatchLock(): boolean {

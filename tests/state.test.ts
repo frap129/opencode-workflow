@@ -41,6 +41,23 @@ describe("WorkflowState", () => {
     expect(state.lastBaseSha).toBeNull()
   })
 
+  test("activePlanFilename defaults to null", () => {
+    resetState()
+    expect(getState().activePlanFilename).toBeNull()
+  })
+
+  test("updateState sets activePlanFilename", () => {
+    resetState()
+    updateState({ activePlanFilename: "my-feature-plan.md" })
+    expect(getState().activePlanFilename).toBe("my-feature-plan.md")
+  })
+
+  test("resetState clears activePlanFilename", () => {
+    updateState({ activePlanFilename: "my-feature-plan.md" })
+    resetState()
+    expect(getState().activePlanFilename).toBeNull()
+  })
+
   test("getState returns a copy (mutations don't affect internal state)", () => {
     const state = getState()
     state.phase = "implement" as any
