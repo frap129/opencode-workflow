@@ -205,22 +205,39 @@ export function extractTask(planText: string, taskNumber: number): string | null
   const lines = planText.split("\n")
   const pattern = new RegExp(`^### Task ${taskNumber}:`)
 
-  // Check for duplicates
-  const matchingLines = lines.filter((line) => pattern.test(line))
-  if (matchingLines.length > 1) return "DUPLICATE"
-  if (matchingLines.length === 0) return null
+  // Check for duplicates — only count headings outside fenced code blocks
+  let inFence = false
+  let matchCount = 0
+  let firstMatchIndex = -1
+  for (let i = 0; i < lines.length; i += 1) {
+    if (/^```/.test(lines[i])) {
+      inFence = !inFence
+      continue
+    }
+    if (!inFence && pattern.test(lines[i])) {
+      matchCount += 1
+      if (firstMatchIndex === -1) firstMatchIndex = i
+    }
+  }
 
-  const startIndex = lines.findIndex((line) => pattern.test(line))
+  if (matchCount > 1) return "DUPLICATE"
+  if (matchCount === 0) return null
 
+  // Find end — skip headings inside fenced code blocks
+  inFence = false
   let endIndex = lines.length
-  for (let i = startIndex + 1; i < lines.length; i += 1) {
-    if (/^### Task \d+:/.test(lines[i])) {
+  for (let i = firstMatchIndex + 1; i < lines.length; i += 1) {
+    if (/^```/.test(lines[i])) {
+      inFence = !inFence
+      continue
+    }
+    if (!inFence && /^### Task \d+:/.test(lines[i])) {
       endIndex = i
       break
     }
   }
 
-  return lines.slice(startIndex, endIndex).join("\n")
+  return lines.slice(firstMatchIndex, endIndex).join("\n")
 }
 
 function extractPlanChunk(planText: string, chunkNumber: number): string | null {

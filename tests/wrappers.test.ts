@@ -1061,6 +1061,51 @@ describe("extractTask", () => {
     expect(result).not.toContain("### Task 2")
   })
 
+  test("does not stop early at ### Task heading inside a fenced code block", () => {
+    const plan = [
+      "### Task 1: Setup",
+      "",
+      "Do some setup.",
+      "",
+      "```markdown",
+      "### Task 2: Example heading in docs",
+      "This is just an example.",
+      "```",
+      "",
+      "More Task 1 content after the fence.",
+      "",
+      "### Task 2: Real task two",
+      "Task 2 content.",
+    ].join("\n")
+    const result = extractTask(plan, 1)
+    expect(result).not.toBeNull()
+    expect(result).toContain("### Task 2: Example heading in docs")
+    expect(result).toContain("More Task 1 content after the fence.")
+    expect(result).not.toContain("Task 2 content.")
+  })
+
+  test("does not report DUPLICATE for ### Task heading inside a fenced code block", () => {
+    const plan = [
+      "### Task 1: Real task",
+      "",
+      "Some content.",
+      "",
+      "```",
+      "### Task 1: This is inside a code block",
+      "```",
+      "",
+      "More content.",
+      "",
+      "### Task 2: Next task",
+    ].join("\n")
+    const result = extractTask(plan, 1)
+    expect(result).not.toBe("DUPLICATE")
+    expect(result).not.toBeNull()
+    expect(result).toContain("### Task 1: This is inside a code block")
+    expect(result).toContain("More content.")
+    expect(result).not.toContain("### Task 2")
+  })
+
   test("ignores malformed headings (no colon, non-numeric)", () => {
     const malformedPlan = [
       "### Task 1 no colon here",
