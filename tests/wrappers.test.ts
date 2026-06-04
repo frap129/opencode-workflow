@@ -628,9 +628,13 @@ describe("review_plan", () => {
     await mkdir(join(testDir, ".opencode/plans"), { recursive: true })
     await writeFile(join(testDir, ".opencode/plans", "my-feature-plan.md"), "# My Feature Plan\n\n## Chunk 1: Foundation\n\nSome content\n")
 
+    // Assert activePlanFilename is already set at dispatch time, then throw
     const client = {
       session: {
-        prompt: mock(async () => { throw new Error("dispatch error") }),
+        prompt: mock(async () => {
+          expect(getState().activePlanFilename).toBe("my-feature-plan.md")
+          throw new Error("dispatch error")
+        }),
         children: mock(async () => ({ data: [] })),
         messages: mock(async () => ({ data: [] })),
       },
@@ -638,11 +642,10 @@ describe("review_plan", () => {
     }
     const tool = createReviewPlanTool(client)
     const result = await tool.execute(
-      { filename: "my-feature-plan.md" },
+      { filename: "my-feature-plan.md", chunk: 1 },
       mockContext(testDir)
     )
     assertErrorResult(JSON.parse(result), "DISPATCH_FAILED")
-    // activePlanFilename must be set before dispatch, so it survives dispatch failure
     expect(getState().activePlanFilename).toBe("my-feature-plan.md")
   })
 
