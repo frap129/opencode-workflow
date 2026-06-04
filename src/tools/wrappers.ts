@@ -119,7 +119,7 @@ export async function dispatchSubtask(
       path: { id: sessionID },
       body: {
         agent: callerAgent,
-        noReply: false,
+        noReply: true,
         variant,
         model,
         parts: [

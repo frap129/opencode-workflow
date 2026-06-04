@@ -66,7 +66,7 @@ function assertDispatchPayload(
   promptSubstring: string
 ) {
   expect(call.path.id).toBe(expectedSessionID)
-  expect(call.body.noReply).toBe(false)
+  expect(call.body.noReply).toBe(true)
   expect(call.body.parts).toHaveLength(1)
   const part = call.body.parts[0]
   expect(part.type).toBe("subtask")
@@ -988,8 +988,8 @@ test("second dispatch throws before any second SDK round-trip while the first ch
   const firstResult = JSON.parse(await firstDispatch)
   expect(firstResult.output).toContain("WORKFLOW_VERDICT: APPROVED")
   expect(getState().dispatchInProgress).toBe(false)
-  // Verify noReply: false was used
-  expect(client.session.prompt.mock.calls[0][0].body.noReply).toBe(false)
+  // Verify noReply: true was used
+  expect(client.session.prompt.mock.calls[0][0].body.noReply).toBe(true)
 })
 
 test("dispatchSubtask subscribes before dispatch, ignores unrelated idle events, and reads only the one new child session", async () => {
@@ -1034,7 +1034,7 @@ test("dispatchSubtask subscribes before dispatch, ignores unrelated idle events,
 
   expect(client.event.subscribe).toHaveBeenCalledTimes(1)
   expect(client.callOrder.indexOf("subscribe")).toBeLessThan(client.callOrder.indexOf("prompt"))
-  expect(client.session.prompt.mock.calls[0][0].body.noReply).toBe(false)
+  expect(client.session.prompt.mock.calls[0][0].body.noReply).toBe(true)
   expect(client.session.messages).toHaveBeenCalledWith({ path: { id: "target-child" } })
   expect(parsed.output).toContain("WORKFLOW_VERDICT: APPROVED")
 })
