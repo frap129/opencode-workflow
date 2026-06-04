@@ -206,15 +206,21 @@ export function extractTask(planText: string, taskNumber: number): string | null
   const pattern = new RegExp(`^### Task ${taskNumber}:`)
 
   // Check for duplicates — only count headings outside fenced code blocks
-  let inFence = false
+  let fenceMarker: string | null = null
   let matchCount = 0
   let firstMatchIndex = -1
   for (let i = 0; i < lines.length; i += 1) {
-    if (/^ {0,3}(`{3,}|~{3,})/.test(lines[i])) {
-      inFence = !inFence
+    const fm = lines[i].match(/^ {0,3}(`{3,}|~{3,})/)
+    if (fm) {
+      const char = fm[1][0]
+      if (fenceMarker === null) {
+        fenceMarker = char
+      } else if (char === fenceMarker) {
+        fenceMarker = null
+      }
       continue
     }
-    if (!inFence && pattern.test(lines[i])) {
+    if (fenceMarker === null && pattern.test(lines[i])) {
       matchCount += 1
       if (firstMatchIndex === -1) firstMatchIndex = i
     }
@@ -224,14 +230,20 @@ export function extractTask(planText: string, taskNumber: number): string | null
   if (matchCount === 0) return null
 
   // Find end — skip headings inside fenced code blocks
-  inFence = false
+  fenceMarker = null
   let endIndex = lines.length
   for (let i = firstMatchIndex + 1; i < lines.length; i += 1) {
-    if (/^ {0,3}(`{3,}|~{3,})/.test(lines[i])) {
-      inFence = !inFence
+    const fm = lines[i].match(/^ {0,3}(`{3,}|~{3,})/)
+    if (fm) {
+      const char = fm[1][0]
+      if (fenceMarker === null) {
+        fenceMarker = char
+      } else if (char === fenceMarker) {
+        fenceMarker = null
+      }
       continue
     }
-    if (!inFence && /^### Task \d+:/.test(lines[i])) {
+    if (fenceMarker === null && /^### Task \d+:/.test(lines[i])) {
       endIndex = i
       break
     }

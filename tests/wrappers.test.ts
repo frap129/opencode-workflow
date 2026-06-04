@@ -1154,6 +1154,50 @@ describe("extractTask", () => {
     expect(result).not.toContain("### Task 2")
   })
 
+  test("does not stop early when ~~~ appears inside a backtick-fenced block", () => {
+    const plan = [
+      "### Task 1: Setup",
+      "",
+      "```markdown",
+      "~~~",
+      "nested tilde content",
+      "~~~",
+      "### Task 2: Fake heading inside backtick fence",
+      "```",
+      "",
+      "More Task 1 content.",
+      "",
+      "### Task 2: Real task two",
+      "Task 2 content.",
+    ].join("\n")
+    const result = extractTask(plan, 1)
+    expect(result).not.toBeNull()
+    expect(result).toContain("### Task 2: Fake heading inside backtick fence")
+    expect(result).toContain("More Task 1 content.")
+    expect(result).not.toContain("Task 2 content.")
+  })
+
+  test("does not report DUPLICATE when ``` appears inside a tilde-fenced block", () => {
+    const plan = [
+      "### Task 1: Setup",
+      "",
+      "~~~",
+      "```",
+      "### Task 1: Duplicate-looking heading inside tilde fence",
+      "```",
+      "~~~",
+      "",
+      "More content.",
+      "",
+      "### Task 2: Next task",
+    ].join("\n")
+    const result = extractTask(plan, 1)
+    expect(result).not.toBe("DUPLICATE")
+    expect(result).not.toBeNull()
+    expect(result).toContain("### Task 1: Duplicate-looking heading inside tilde fence")
+    expect(result).toContain("More content.")
+  })
+
   test("ignores malformed headings (no colon, non-numeric)", () => {
     const malformedPlan = [
       "### Task 1 no colon here",
